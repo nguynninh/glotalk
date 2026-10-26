@@ -1,0 +1,116 @@
+<resources>
+    <string name="accessibility_service_label">VDubbing — 画面を読み取って翻訳</string>
+    <string name="accessibility_service_description">VDubbing は、あなたまたは他のアプリからの要求があったときに画面の内容を取得し、その上に翻訳を表示するためにこの権限を使用します。要求がないときに画面を読み取ることはありません。</string>
+
+    <string name="permission_call_translate_label">VDubbing に画面の翻訳を依頼</string>
+    <string name="permission_call_translate_desc">このアプリが VDubbing に、表示中の内容を読み取って翻訳するよう要求できるようにします。</string>
+
+    <string name="notif_channel_name">バックグラウンド翻訳</string>
+    <string name="notif_channel_desc">VDubbing が要求に応じて翻訳できる状態のときに表示されます。</string>
+    <string name="notif_title">VDubbing はバックグラウンドで動作中</string>
+    <string name="notif_text">要求に応じていつでも画面を翻訳できます。</string>
+    <string name="notif_action_translate">今すぐ翻訳</string>
+    <string name="notif_action_stop">停止</string>
+
+    <plurals name="notif_translated_done">
+        <item quantity="other">%1$d 行を翻訳しました（%2$s）。</item>
+    </plurals>
+
+    <string name="settings_intro">画面に表示されている文字を読み取り、その場で翻訳します。バックグラウンドサービスが動作中は、他のアプリから AIDL 経由で呼び出せます。</string>
+
+    <string name="settings_section_background">バックグラウンド翻訳</string>
+    <string name="settings_start_service">バックグラウンド翻訳を開始</string>
+    <string name="settings_translating">翻訳中…</string>
+    <string name="settings_translate_now">今すぐ試す</string>
+    <string name="settings_show_bubble">バブルを表示</string>
+    <string name="settings_clear_translation">翻訳を消去</string>
+    <string name="settings_auto_translate">アプリを切り替えたら翻訳</string>
+
+    <string name="settings_section_target_language">翻訳先の言語</string>
+    <string name="settings_section_interface">外観</string>
+    <string name="settings_section_app_language">アプリの言語</string>
+
+    <string name="settings_section_last_result">最新の結果</string>
+    <string name="settings_last_result_meta">%1$s · %2$s · %3$s → %4$s</string>
+
+    <string name="settings_section_diagnostics">ユーザー補助の診断</string>
+    <string name="settings_diagnostics_hint">設定で有効にしたのに上の行が「オフ」のままの場合は、下の 2 つの値を比べてください。システムが保存しているサービス名と、このアプリが探している名前が分かります。</string>
+    <string name="settings_bubble_hint">バックグラウンドサービスが動作中は 文A のバブルが画面に浮かびます。タップで翻訳、ドラッグで移動。翻訳の表示中は赤い ✕ に変わり、タップで閉じます。</string>
+    <string name="settings_developer_hint">開発者向け: サービスのバインドと JSON の受け取り方は docs/INTEGRATION.md を参照してください。</string>
+
+    <string name="settings_section_status">状態</string>
+    <string name="status_accessibility">ユーザー補助の権限</string>
+    <string name="status_needs_rebind">オフ/オンし直してください</string>
+    <string name="status_starting">起動中</string>
+    <string name="status_rebind_hint">Android がユーザー補助サービスを切断しました（アプリを上書きインストールした後によく起こります）。設定 → ユーザー補助 で VDubbing をいったんオフにしてからオンにしてください。必要なのは一度だけです。</string>
+    <string name="status_open_accessibility_settings">ユーザー補助の設定を開く</string>
+    <string name="status_background_service">バックグラウンドサービス</string>
+    <string name="status_notifications">通知</string>
+    <string name="status_cloud">クラウドの予備</string>
+    <string name="status_accessibility_settings">ユーザー補助の設定</string>
+    <string name="status_enable_accessibility">ユーザー補助を有効にする</string>
+    <string name="status_enable_notifications">通知を有効にする</string>
+
+    <string name="state_on">オン</string>
+    <string name="state_off">オフ</string>
+
+    <string name="diag_master_switch">全体スイッチ</string>
+    <string name="diag_service_live">サービスの接続</string>
+    <string name="diag_connection_error">接続エラー</string>
+    <string name="diag_expected_component">アプリが探す名前</string>
+    <string name="diag_system_stored">システムが保存した名前</string>
+    <string name="diag_empty">(空 — 有効なサービスなし)</string>
+    <string name="diag_on">オン</string>
+    <string name="diag_off">オフ</string>
+    <string name="diag_yes">あり</string>
+    <string name="diag_no">なし</string>
+
+    <string name="cloud_section">クラウドの予備 (Gemini)</string>
+    <string name="cloud_description">端末で読むには画像がぼやけているときに使います。有効にすると、スクリーンショットが Google に送信されます。</string>
+    <string name="cloud_enable">クラウドを有効にする</string>
+    <string name="cloud_show_key">キーを表示</string>
+    <string name="cloud_hide_key">キーを隠す</string>
+    <string name="cloud_verify_key">キーを確認</string>
+    <string name="cloud_status_both">使用中: %1$s + %2$s</string>
+    <string name="cloud_status_local">使用中: %1$s のみ</string>
+
+    <string name="action_save">保存</string>
+    <string name="action_close">閉じる</string>
+    <string name="dialog_error_title">翻訳できませんでした</string>
+    <string name="dialog_done_title">完了</string>
+
+    <string name="theme_system">システムに合わせる</string>
+    <string name="theme_light">ライト</string>
+    <string name="theme_dark">ダーク</string>
+    <string name="language_auto">自動判別</string>
+    <string name="language_unknown">不明</string>
+    <string name="app_language_system">システムに合わせる</string>
+    <string name="engine_on_device">オンデバイス</string>
+    <string name="engine_cloud">クラウド</string>
+
+    <plurals name="unit_lines">
+        <item quantity="other">%1$d 行</item>
+    </plurals>
+
+    <plurals name="message_translated_done">
+        <item quantity="other">%1$d 行を翻訳しました（%2$s）。</item>
+    </plurals>
+
+    <string name="message_cloud_saved">クラウド設定を保存しました。</string>
+    <string name="message_key_valid">API キーは有効です。</string>
+    <string name="message_no_accessibility">ユーザー補助の権限がオフです。設定 → ユーザー補助 を開いて VDubbing を有効にしてください。</string>
+    <string name="message_service_waking">ユーザー補助は有効ですが、サービスがまだ準備できていません。1〜2 秒待ってからもう一度お試しください。</string>
+
+    <string name="error_unknown">不明なエラーです。</string>
+    <string name="error_accessibility_disabled">VDubbing のユーザー補助権限が有効になっていません。</string>
+    <string name="error_capture_failed">画面をキャプチャできませんでした。</string>
+    <string name="error_no_text">画面から文字を認識できませんでした。</string>
+    <string name="error_translation_failed">翻訳に失敗しました。接続を確認して再試行してください。</string>
+    <string name="error_invalid_api_key">Gemini の API キーが正しくありません。</string>
+    <string name="error_quota">Gemini の利用上限に達しました。</string>
+    <string name="error_offline">ネットワークに接続されていません。</string>
+    <string name="error_busy">翻訳中です。しばらくしてから再試行してください。</string>
+
+    <string name="bubble_translate_screen">画面を翻訳</string>
+    <string name="bubble_clear_translation">翻訳を消去</string>
+</resources>

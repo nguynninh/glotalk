@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Night counterpart of values/themes.xml: dark platform styling so the
+         launch window and any system-drawn chrome match the dark scheme. -->
+    <style name="Theme.VDubbing" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

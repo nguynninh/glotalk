@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- The platform theme only paints the launch window, before Compose renders.
+         It cannot be Material3 (that is AppCompat-only and this app has no
+         AppCompat dependency), so light/dark is done with the values-night
+         variant of this style; window_background is qualified the same way. -->
+    <style name="Theme.VDubbing" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+    </style>
+</resources>

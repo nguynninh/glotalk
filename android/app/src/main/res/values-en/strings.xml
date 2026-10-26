@@ -1,0 +1,119 @@
+<resources>
+    <string name="accessibility_service_label">VDubbing — read and translate the screen</string>
+    <string name="accessibility_service_description">VDubbing uses this permission to capture what is on screen when you or another app asks it to, then shows the translation on top. It does not read the screen when you have not asked.</string>
+
+    <string name="permission_call_translate_label">Ask VDubbing to translate the screen</string>
+    <string name="permission_call_translate_desc">Lets this app ask VDubbing to read and translate what is currently on screen.</string>
+
+    <string name="notif_channel_name">Background translation</string>
+    <string name="notif_channel_desc">Shown while VDubbing is ready to translate on request.</string>
+    <string name="notif_title">VDubbing is running in the background</string>
+    <string name="notif_text">Ready to translate the screen on request.</string>
+    <string name="notif_action_translate">Translate now</string>
+    <string name="notif_action_stop">Turn off</string>
+
+    <plurals name="notif_translated_done">
+        <item quantity="one">Translated %1$d line (%2$s).</item>
+        <item quantity="other">Translated %1$d lines (%2$s).</item>
+    </plurals>
+
+    <string name="settings_intro">Reads the text on screen and translates it in place. Other apps can call in over AIDL while the background service is running.</string>
+
+    <string name="settings_section_background">Background translation</string>
+    <string name="settings_start_service">Start background translation</string>
+    <string name="settings_translating">Translating…</string>
+    <string name="settings_translate_now">Try translating now</string>
+    <string name="settings_show_bubble">Show bubble</string>
+    <string name="settings_clear_translation">Clear translation</string>
+    <string name="settings_auto_translate">Translate when switching apps</string>
+
+    <string name="settings_section_target_language">Target language</string>
+    <string name="settings_section_interface">Appearance</string>
+    <string name="settings_section_app_language">App language</string>
+
+    <string name="settings_section_last_result">Latest result</string>
+    <string name="settings_last_result_meta">%1$s · %2$s · %3$s → %4$s</string>
+
+    <string name="settings_section_diagnostics">Accessibility diagnostics</string>
+    <string name="settings_diagnostics_hint">If you enabled it in Settings but the line above still says it is off, compare the two values below — they show the service name the system stored against the name this app looks for.</string>
+    <string name="settings_bubble_hint">The 文A bubble floats over the screen while the background service runs: tap to translate, drag to move it. While a translation is showing it turns into a red ✕ to dismiss it.</string>
+    <string name="settings_developer_hint">Developers: see docs/INTEGRATION.md to bind the service and receive JSON.</string>
+
+    <string name="settings_section_status">Status</string>
+    <string name="status_accessibility">Accessibility permission</string>
+    <string name="status_needs_rebind">toggle off and on</string>
+    <string name="status_starting">starting</string>
+    <string name="status_rebind_hint">Android has disconnected the accessibility service (this usually happens after reinstalling the app). Go to Settings → Accessibility, turn VDubbing off and back on. You only need to do this once.</string>
+    <string name="status_open_accessibility_settings">Open Accessibility settings</string>
+    <string name="status_background_service">Background service</string>
+    <string name="status_notifications">Notifications</string>
+    <string name="status_cloud">Cloud fallback</string>
+    <string name="status_accessibility_settings">Accessibility settings</string>
+    <string name="status_enable_accessibility">Enable accessibility</string>
+    <string name="status_enable_notifications">Enable notifications</string>
+
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+
+    <string name="diag_master_switch">Master switch</string>
+    <string name="diag_service_live">Service connected</string>
+    <string name="diag_connection_error">Connection error</string>
+    <string name="diag_expected_component">Name the app looks for</string>
+    <string name="diag_system_stored">Name the system stored</string>
+    <string name="diag_empty">(empty — no service enabled)</string>
+    <string name="diag_on">on</string>
+    <string name="diag_off">off</string>
+    <string name="diag_yes">yes</string>
+    <string name="diag_no">no</string>
+
+    <string name="cloud_section">Cloud fallback (Gemini)</string>
+    <string name="cloud_description">Used when the image is too blurry to read on device. While enabled, screenshots are sent to Google.</string>
+    <string name="cloud_enable">Enable cloud</string>
+    <string name="cloud_show_key">Show key</string>
+    <string name="cloud_hide_key">Hide key</string>
+    <string name="cloud_verify_key">Check key</string>
+    <string name="cloud_status_both">Using: %1$s + %2$s</string>
+    <string name="cloud_status_local">Using: %1$s only</string>
+
+    <string name="action_save">Save</string>
+    <string name="action_close">Close</string>
+    <string name="dialog_error_title">Translation failed</string>
+    <string name="dialog_done_title">Done</string>
+
+    <string name="theme_system">Follow system</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="language_auto">Detect automatically</string>
+    <string name="language_unknown">Unknown</string>
+    <string name="app_language_system">Follow system</string>
+    <string name="engine_on_device">on-device</string>
+    <string name="engine_cloud">cloud</string>
+
+    <plurals name="unit_lines">
+        <item quantity="one">%1$d line</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+
+    <plurals name="message_translated_done">
+        <item quantity="one">Translated %1$d line (%2$s).</item>
+        <item quantity="other">Translated %1$d lines (%2$s).</item>
+    </plurals>
+
+    <string name="message_cloud_saved">Cloud settings saved.</string>
+    <string name="message_key_valid">API key is valid.</string>
+    <string name="message_no_accessibility">Accessibility permission is off. Open Settings → Accessibility and enable VDubbing.</string>
+    <string name="message_service_waking">Accessibility is on but the service is not ready yet. Wait a second or two and try again.</string>
+
+    <string name="error_unknown">Unknown error.</string>
+    <string name="error_accessibility_disabled">Accessibility permission is not enabled for VDubbing.</string>
+    <string name="error_capture_failed">Could not capture the screen.</string>
+    <string name="error_no_text">No text was recognized on screen.</string>
+    <string name="error_translation_failed">Translation failed. Check your connection and try again.</string>
+    <string name="error_invalid_api_key">The Gemini API key is not valid.</string>
+    <string name="error_quota">Gemini quota exceeded.</string>
+    <string name="error_offline">No network connection.</string>
+    <string name="error_busy">A translation is already running. Try again shortly.</string>
+
+    <string name="bubble_translate_screen">Translate screen</string>
+    <string name="bubble_clear_translation">Clear translation</string>
+</resources>

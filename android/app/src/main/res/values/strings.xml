@@ -1,0 +1,122 @@
+<resources>
+    <!-- Manifest, accessibility config, notification channel -->
+    <string name="accessibility_service_label">VDubbing — đọc và dịch màn hình</string>
+    <string name="accessibility_service_description">VDubbing dùng quyền này để chụp nội dung đang hiển thị khi bạn hoặc một app khác yêu cầu, rồi hiển thị bản dịch đè lên màn hình. Không đọc nội dung khi bạn không yêu cầu.</string>
+
+    <string name="permission_call_translate_label">Gọi VDubbing dịch màn hình</string>
+    <string name="permission_call_translate_desc">Cho phép app này yêu cầu VDubbing đọc và dịch nội dung đang hiển thị trên màn hình.</string>
+
+    <string name="notif_channel_name">Dịch nền</string>
+    <string name="notif_channel_desc">Hiển thị khi VDubbing sẵn sàng dịch theo yêu cầu.</string>
+    <string name="notif_title">VDubbing đang chạy nền</string>
+    <string name="notif_text">Sẵn sàng dịch màn hình theo yêu cầu.</string>
+    <string name="notif_action_translate">Dịch ngay</string>
+    <string name="notif_action_stop">Tắt</string>
+
+    <plurals name="notif_translated_done">
+        <item quantity="other">Đã dịch %1$d dòng (%2$s).</item>
+    </plurals>
+
+    <!-- Settings screen -->
+    <string name="settings_intro">Đọc chữ đang hiển thị trên màn hình và dịch ngay tại chỗ. App khác có thể gọi sang qua AIDL khi service nền đang chạy.</string>
+
+    <string name="settings_section_background">Dịch nền</string>
+    <string name="settings_start_service">Bật dịch nền</string>
+    <string name="settings_translating">Đang dịch…</string>
+    <string name="settings_translate_now">Dịch thử ngay</string>
+    <string name="settings_show_bubble">Hiện bong bóng</string>
+    <string name="settings_clear_translation">Xoá bản dịch</string>
+    <string name="settings_auto_translate">Tự dịch khi chuyển app</string>
+
+    <string name="settings_section_target_language">Ngôn ngữ đích</string>
+    <string name="settings_section_interface">Giao diện</string>
+    <string name="settings_section_app_language">Ngôn ngữ ứng dụng</string>
+
+    <string name="settings_section_last_result">Kết quả gần nhất</string>
+    <!-- 1: line count, 2: engine, 3: source language, 4: target language -->
+    <string name="settings_last_result_meta">%1$s · %2$s · %3$s → %4$s</string>
+
+    <string name="settings_section_diagnostics">Chẩn đoán Trợ năng</string>
+    <string name="settings_diagnostics_hint">Nếu bạn đã bật trong Cài đặt mà mục trên vẫn báo chưa bật, đối chiếu hai dòng dưới đây — chúng cho biết hệ thống lưu tên service là gì so với tên app tìm.</string>
+    <string name="settings_bubble_hint">Bong bóng 文A nổi trên màn hình khi service nền chạy: chạm để dịch, kéo để dời. Khi đang có bản dịch nó chuyển thành ✕ đỏ để tắt.</string>
+    <string name="settings_developer_hint">Nhà phát triển: xem docs/INTEGRATION.md để bind service và nhận JSON.</string>
+
+    <string name="settings_section_status">Trạng thái</string>
+    <string name="status_accessibility">Quyền Trợ năng</string>
+    <string name="status_needs_rebind">cần tắt/bật lại</string>
+    <string name="status_starting">đang khởi động</string>
+    <string name="status_rebind_hint">Android đã ngắt kết nối dịch vụ Trợ năng (thường xảy ra sau khi cài đè app). Vào Cài đặt → Trợ năng, tắt VDubbing rồi bật lại. Chỉ cần làm một lần.</string>
+    <string name="status_open_accessibility_settings">Mở Cài đặt Trợ năng</string>
+    <string name="status_background_service">Service nền</string>
+    <string name="status_notifications">Thông báo</string>
+    <string name="status_cloud">Cloud dự phòng</string>
+    <string name="status_accessibility_settings">Cài đặt Trợ năng</string>
+    <string name="status_enable_accessibility">Bật Trợ năng</string>
+    <string name="status_enable_notifications">Bật thông báo</string>
+
+    <string name="state_on">Đã bật</string>
+    <string name="state_off">Chưa bật</string>
+
+    <string name="diag_master_switch">Công tắc tổng</string>
+    <string name="diag_service_live">Service đang sống</string>
+    <string name="diag_connection_error">Lỗi kết nối</string>
+    <string name="diag_expected_component">Tên app tìm</string>
+    <string name="diag_system_stored">Hệ thống lưu</string>
+    <string name="diag_empty">(rỗng — chưa bật service nào)</string>
+    <string name="diag_on">bật</string>
+    <string name="diag_off">tắt</string>
+    <string name="diag_yes">có</string>
+    <string name="diag_no">không</string>
+
+    <string name="cloud_section">Cloud dự phòng (Gemini)</string>
+    <string name="cloud_description">Dùng khi ảnh quá mờ để đọc trên máy. Khi bật, ảnh chụp màn hình được gửi tới Google.</string>
+    <string name="cloud_enable">Bật cloud</string>
+    <string name="cloud_show_key">Hiện key</string>
+    <string name="cloud_hide_key">Ẩn key</string>
+    <string name="cloud_verify_key">Kiểm tra key</string>
+    <string name="cloud_status_both">Đang dùng: %1$s + %2$s</string>
+    <string name="cloud_status_local">Đang dùng: chỉ %1$s</string>
+
+    <string name="action_save">Lưu</string>
+    <string name="action_close">Đóng</string>
+    <string name="dialog_error_title">Không dịch được</string>
+    <string name="dialog_done_title">Xong</string>
+
+    <!-- Theme, languages, engine -->
+    <string name="theme_system">Theo hệ thống</string>
+    <string name="theme_light">Sáng</string>
+    <string name="theme_dark">Tối</string>
+    <string name="language_auto">Tự nhận diện</string>
+    <string name="language_unknown">Không rõ</string>
+    <string name="app_language_system">Theo hệ thống</string>
+    <string name="engine_on_device">on-device</string>
+    <string name="engine_cloud">cloud</string>
+
+    <plurals name="unit_lines">
+        <item quantity="other">%1$d dòng</item>
+    </plurals>
+
+    <plurals name="message_translated_done">
+        <item quantity="other">Đã dịch %1$d dòng (%2$s).</item>
+    </plurals>
+
+    <!-- Messages and errors -->
+    <string name="message_cloud_saved">Đã lưu cài đặt cloud.</string>
+    <string name="message_key_valid">API key hợp lệ.</string>
+    <string name="message_no_accessibility">Chưa bật quyền Trợ năng. Mở Cài đặt → Trợ năng và bật VDubbing.</string>
+    <string name="message_service_waking">Đã bật Trợ năng nhưng dịch vụ chưa sẵn sàng. Đợi 1–2 giây rồi thử lại.</string>
+
+    <string name="error_unknown">Lỗi không xác định.</string>
+    <string name="error_accessibility_disabled">Chưa bật quyền Trợ năng cho VDubbing.</string>
+    <string name="error_capture_failed">Không chụp được màn hình.</string>
+    <string name="error_no_text">Không nhận diện được chữ trên màn hình.</string>
+    <string name="error_translation_failed">Dịch thất bại. Kiểm tra kết nối và thử lại.</string>
+    <string name="error_invalid_api_key">API key Gemini không hợp lệ.</string>
+    <string name="error_quota">Đã hết hạn mức Gemini.</string>
+    <string name="error_offline">Không có mạng.</string>
+    <string name="error_busy">Đang dịch, thử lại sau.</string>
+
+    <!-- Overlay bubble -->
+    <string name="bubble_translate_screen">Dịch màn hình</string>
+    <string name="bubble_clear_translation">Xoá bản dịch</string>
+</resources>

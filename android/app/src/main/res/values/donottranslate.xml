@@ -1,0 +1,12 @@
+<resources>
+    <!-- Brand and technical terms: the same in every locale. -->
+    <string name="app_name" translatable="false">VDubbing</string>
+    <string name="cloud_api_key_label" translatable="false">Gemini API key</string>
+
+    <!-- Endonyms: a language is always written in that language, never translated. -->
+    <string name="app_language_vietnamese" translatable="false">Tiếng Việt</string>
+    <string name="app_language_english" translatable="false">English</string>
+    <string name="app_language_japanese" translatable="false">日本語</string>
+    <string name="app_language_chinese" translatable="false">简体中文</string>
+    <string name="app_language_korean" translatable="false">한국어</string>
+</resources>
