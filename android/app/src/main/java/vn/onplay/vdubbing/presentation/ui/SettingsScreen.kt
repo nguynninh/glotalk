@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.domain.model.AppLanguage
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 
@@ -56,7 +58,9 @@ fun SettingsScreen(
     onTranslateNow: () -> Unit,
     onHideOverlay: () -> Unit,
     onShowBubble: () -> Unit,
+    onSourceLanguageChange: (Language) -> Unit,
     onTargetLanguageChange: (Language) -> Unit,
+    onDisplayModeChange: (DisplayMode) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onAutoTranslateChange: (Boolean) -> Unit,
@@ -118,6 +122,23 @@ fun SettingsScreen(
             }
         }
 
+        Section(stringResource(R.string.settings_section_source_language)) {
+            // AUTO detects per capture; naming the language skips that call and
+            // is steadier on short lines, which is why it is offered at all.
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Language.SOURCES.forEach { language ->
+                    FilterChip(
+                        selected = state.sourceLanguage == language,
+                        onClick = { onSourceLanguageChange(language) },
+                        label = { Text(language.displayLabel()) },
+                    )
+                }
+            }
+        }
+
         Section(stringResource(R.string.settings_section_target_language)) {
             Row(
                 modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -132,6 +153,33 @@ fun SettingsScreen(
                     )
                 }
             }
+            HorizontalDivider()
+            Text(
+                stringResource(R.string.panel_mode_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DisplayMode.CHOICES.forEach { mode ->
+                    FilterChip(
+                        selected = state.displayMode == mode,
+                        onClick = { onDisplayModeChange(mode) },
+                        label = { Text(stringResource(mode.labelRes())) },
+                    )
+                }
+            }
+            Text(
+                stringResource(
+                    if (state.displayMode == DisplayMode.PARALLEL) {
+                        R.string.panel_mode_parallel_desc
+                    } else {
+                        R.string.panel_mode_replace_desc
+                    },
+                ),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
 
         Section(stringResource(R.string.settings_section_app_language)) {

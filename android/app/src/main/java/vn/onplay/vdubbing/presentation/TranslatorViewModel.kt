@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.di.AppContainer
 import vn.onplay.vdubbing.domain.model.AppLanguage
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 import vn.onplay.vdubbing.domain.model.TranslationEngine
@@ -45,7 +46,9 @@ class TranslatorViewModel(
             it.copy(
                 savedKey = container.settings.geminiKey,
                 cloudEnabled = container.settings.cloudFallbackEnabled,
+                sourceLanguage = container.settings.sourceLanguage,
                 targetLanguage = container.settings.targetLanguage,
+                displayMode = container.settings.displayMode,
                 autoTranslate = container.settings.autoTranslate,
                 themeMode = container.settings.themeMode,
                 appLanguage = container.settings.appLanguage,
@@ -99,9 +102,22 @@ class TranslatorViewModel(
         services.stop()
     }
 
+    fun onSourceLanguageChange(language: Language) {
+        container.settings.sourceLanguage = language
+        _state.update { it.copy(sourceLanguage = language) }
+    }
+
     fun onTargetLanguageChange(language: Language) {
         container.settings.targetLanguage = language
         _state.update { it.copy(targetLanguage = language) }
+    }
+
+    fun onDisplayModeChange(mode: DisplayMode) {
+        container.settings.displayMode = mode
+        _state.update { it.copy(displayMode = mode) }
+        // A translation already on screen is redrawn in the new mode; the
+        // setting alone would only take effect on the next capture.
+        AccessibilityBridge.service?.overlayRenderer?.setDisplayMode(mode)
     }
 
     fun onAutoTranslateChange(enabled: Boolean) {
@@ -150,7 +166,7 @@ class TranslatorViewModel(
         viewModelScope.launch {
             runCatching {
                 container.translateScreen(
-                    source = Language.AUTO,
+                    source = _state.value.sourceLanguage,
                     target = _state.value.targetLanguage,
                     // We are in our own app, so the result shows on this screen
                     // instead of an overlay covering it.

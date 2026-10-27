@@ -33,6 +33,10 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     @Volatile
     var onWindowChanged: (() -> Unit)? = null
 
+    /** Invoked when screen scrolls underneath, e.g. in Chrome, ListView, WebView. */
+    @Volatile
+    var onScreenScrolled: (() -> Unit)? = null
+
     @Volatile
     private var lastForegroundPackage: String? = null
 
@@ -80,14 +84,34 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     internal fun recordRuntimeFailure(stage: String, error: Throwable) = recordFailure(stage, error)
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        event.packageName?.let { lastForegroundPackage = it.toString() }
-        // A throw on this path is attributed to the service and gets it disabled
-        // by the system, so a callback bug must not escape here.
-        try {
-            onWindowChanged?.invoke()
-        } catch (t: Throwable) {
-            recordFailure("windowChanged", t)
+        val ev = event ?: return
+        val packageName = ev.packageName?.toString() ?: return
+        // Our own overlay windows — bubble, panel, banner — are windows too, and
+        // they fire this event with our package. Recording them made the app look
+        // like the foreground app right after the panel closed, so the next
+        // translation decided it was covering our own screen and drew nothing.
+        // Our activity is tracked by [AppForeground] instead, which an overlay
+        // window cannot enter.
+        if (packageName == this.packageName) return
+
+        when (ev.eventType) {
+            AccessibilityEvent.TYPE_VIEW_SCROLLED -> {
+                try {
+                    onScreenScrolled?.invoke()
+                } catch (t: Throwable) {
+                    recordFailure("screenScrolled", t)
+                }
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                lastForegroundPackage = packageName
+                // A throw on this path is attributed to the service and gets it disabled
+                // by the system, so a callback bug must not escape here.
+                try {
+                    onWindowChanged?.invoke()
+                } catch (t: Throwable) {
+                    recordFailure("windowChanged", t)
+                }
+            }
         }
     }
 
@@ -105,6 +129,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
 
     private fun teardown() {
         onWindowChanged = null
+        onScreenScrolled = null
         AppLocaleController.removeListener(localeListener)
         overlayRenderer?.hide()
         overlayRenderer = null
@@ -114,11 +139,16 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     override fun isReady(): Boolean = true
 
     /**
-     * The last window that gained focus. Accessibility does not expose a
-     * getCurrentPackage() call, so this is tracked from events; it can be one
-     * window stale during a transition, which is fine for the self-check.
+     * The last window that gained focus, excluding our own overlay windows.
+     * Accessibility does not expose a getCurrentPackage() call, so this is
+     * tracked from events; it can be one window stale during a transition,
+     * which is fine for the self-check.
      */
-    override fun foregroundPackage(): String? = lastForegroundPackage
+    override fun foregroundPackage(): String? =
+        // A resumed activity of ours outranks everything the window events said:
+        // the settings screen must not be overlaid, and no overlay window can
+        // make us believe we are in it.
+        if (AppForeground.isOurs) packageName else lastForegroundPackage
 
     /**
      * Screenshots arrive as hardware bitmaps, which ML Kit cannot read. Copy to

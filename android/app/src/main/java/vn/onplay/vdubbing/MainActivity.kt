@@ -24,6 +24,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import vn.onplay.vdubbing.domain.model.AppLanguage
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
+import vn.onplay.vdubbing.framework.accessibility.AppForeground
 import vn.onplay.vdubbing.framework.accessibility.SystemAccessibilityStatus
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
 import vn.onplay.vdubbing.framework.service.TranslateService
@@ -109,7 +110,9 @@ class MainActivity : ComponentActivity() {
                         onTranslateNow = viewModel::onTranslateNow,
                         onHideOverlay = viewModel::onHideOverlay,
                         onShowBubble = viewModel::onShowBubble,
+                        onSourceLanguageChange = viewModel::onSourceLanguageChange,
                         onTargetLanguageChange = viewModel::onTargetLanguageChange,
+                        onDisplayModeChange = viewModel::onDisplayModeChange,
                         onThemeModeChange = viewModel::onThemeModeChange,
                         onAppLanguageChange = viewModel::onAppLanguageChange,
                         onAutoTranslateChange = viewModel::onAutoTranslateChange,
@@ -122,8 +125,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Not onStop: a paused activity is already behind whatever is in front,
+        // and onStop can lag behind the next app's first frame.
+        AppForeground.onActivityPaused()
+    }
+
     override fun onResume() {
         super.onResume()
+        AppForeground.onActivityResumed()
         // The accessibility toggle lives in system settings, so re-read it here.
         viewModel.refreshSystemState()
         pollUntilAccessibilityLive()

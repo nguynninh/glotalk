@@ -36,7 +36,7 @@
 
     <string name="settings_section_diagnostics">Accessibility diagnostics</string>
     <string name="settings_diagnostics_hint">If you enabled it in Settings but the line above still says it is off, compare the two values below — they show the service name the system stored against the name this app looks for.</string>
-    <string name="settings_bubble_hint">The 文A bubble floats over the screen while the background service runs: tap to translate, drag to move it. While a translation is showing it turns into a red ✕ to dismiss it.</string>
+    <string name="settings_bubble_hint">The TA bubble floats over the screen while the background service runs: tap to open the translation panel, long-press for the quick menu (pause, language, settings, hide, exit), drag to move it. While a translation is showing it turns into a red ✕ to dismiss it.</string>
     <string name="settings_developer_hint">Developers: see docs/INTEGRATION.md to bind the service and receive JSON.</string>
 
     <string name="settings_section_status">Status</string>
@@ -116,4 +116,29 @@
 
     <string name="bubble_translate_screen">Translate screen</string>
     <string name="bubble_clear_translation">Clear translation</string>
+
+    <!-- Overlay bubble, panel and quick menu -->
+    <string name="settings_section_source_language">Source language</string>
+    <string name="panel_title">Translate screen</string>
+    <string name="panel_swap_languages">Swap languages</string>
+    <string name="panel_realtime_title">Realtime translation</string>
+    <string name="panel_realtime_subtitle">Translate again when the screen changes</string>
+    <string name="panel_mode_title">Display mode</string>
+    <string name="panel_mode_parallel">Side by side</string>
+    <string name="panel_mode_parallel_desc">Keep the original, translate below</string>
+    <string name="panel_mode_replace">Replace</string>
+    <string name="panel_mode_replace_desc">Cover the original with the translation</string>
+    <string name="panel_advanced">Advanced settings</string>
+    <string name="panel_start">Start translating</string>
+    <string name="menu_status_active">Active</string>
+    <string name="menu_status_translating">Translating…</string>
+    <string name="menu_status_idle">Idle</string>
+    <string name="menu_pause">Pause translation</string>
+    <string name="menu_language">Choose language</string>
+    <string name="menu_hide_bubble">Hide bubble</string>
+    <string name="menu_exit">Exit</string>
+    <string name="overlay_banner_title">Translation (%1$s)</string>
+    <string name="bubble_open_panel">Open translation panel</string>
+    <string name="notif_open_hint">Open VDubbing from its ongoing notification.</string>
+    <string name="bubble_translating">Translating the screen…</string>
 </resources>

@@ -5,12 +5,14 @@ import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.TranslationException
 import vn.onplay.vdubbing.domain.repository.TranslationRepository
+
 
 /**
  * ML Kit language identification and on-device translation.
@@ -25,8 +27,14 @@ class TranslationRepositoryImpl : TranslationRepository {
     private val translators = HashMap<String, Translator>()
 
     override suspend fun detect(text: String): Language = withContext(Dispatchers.Default) {
-        val code = runCatching { identifier.identifyLanguage(text).await() }.getOrDefault("und")
-        Language.fromCode(code)
+        val detected = runCatching { identifier.identifyLanguage(text).await() }
+        // Logged, not swallowed: an UNKNOWN here means every line below is handed
+        // back unchanged, and the overlay would silently draw nothing at all.
+        val code = detected.getOrElse {
+            Log.w(TAG, "language detection failed", it)
+            "und"
+        }
+        Language.fromCode(code).also { Log.i(TAG, "detected $code -> $it") }
     }
 
     override suspend fun translate(
@@ -47,9 +55,24 @@ class TranslationRepositoryImpl : TranslationRepository {
                 )
             }
 
-            lines.map { line ->
-                runCatching { translator.translate(line).await() }.getOrDefault(line)
+            var failed = 0
+            val translated = lines.map { line ->
+                runCatching { translator.translate(line).await() }
+                    .getOrElse {
+                        failed++
+                        line
+                    }
             }
+            // Every failed line falls back to its own text, which the overlay
+            // then skips — so a model that never loaded looks exactly like a
+            // screen with nothing to translate. Say so.
+            if (failed > 0) Log.w(TAG, "$failed/${lines.size} lines fell back to the original")
+            if (failed == lines.size) {
+                throw TranslationException.TranslationFailed(
+                    "Không dịch được dòng nào ${source.code}→${target.code}.",
+                )
+            }
+            translated
         }
     }
 
@@ -67,5 +90,9 @@ class TranslationRepositoryImpl : TranslationRepository {
         runCatching { identifier.close() }
         translators.values.forEach { runCatching { it.close() } }
         translators.clear()
+    }
+
+    private companion object {
+        const val TAG = "VDubbingTranslate"
     }
 }

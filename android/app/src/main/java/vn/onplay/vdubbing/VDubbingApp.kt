@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
 import vn.onplay.vdubbing.di.AppContainer
+import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
 
 /**
@@ -33,5 +34,8 @@ class VDubbingApp : Application() {
         // On Android 13+ the per-app language can also be changed from system
         // Settings; keep our own preference (and the service notifications) in step.
         AppLocaleController.syncFromSystem(this)
+        // Overlay windows are long-lived and are not recreated for a language
+        // change, so anything already drawn has to be redrawn by hand.
+        AccessibilityBridge.service?.overlayRenderer?.refresh()
     }
 }

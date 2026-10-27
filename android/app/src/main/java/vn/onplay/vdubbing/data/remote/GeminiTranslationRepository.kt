@@ -208,6 +208,7 @@ class GeminiTranslationRepository(
                 top = box.top,
                 width = box.width(),
                 height = box.height(),
+                lineCount = (box.height() / ESTIMATED_LINE_HEIGHT).coerceAtLeast(1),
             )
         }
 
@@ -247,6 +248,9 @@ class GeminiTranslationRepository(
         const val JPEG_QUALITY = 80
         val JSON = "application/json; charset=utf-8".toMediaType()
         val REQUIRED_FIELDS = listOf("original", "translated", "x", "y", "w", "h")
+
+        /** Body text in a MAX_IMAGE_EDGE-scaled screenshot is roughly this tall. */
+        const val ESTIMATED_LINE_HEIGHT = 40
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)

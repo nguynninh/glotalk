@@ -35,7 +35,7 @@
 
     <string name="settings_section_diagnostics">无障碍诊断</string>
     <string name="settings_diagnostics_hint">如果已在系统设置中开启，而上方的状态仍显示未开启，请比照下面两行——它们会显示系统保存的服务名与应用查找的名称是否一致。</string>
-    <string name="settings_bubble_hint">后台服务运行时，文A 悬浮球会浮在屏幕上：点击翻译，拖动可移动。有译文显示时它会变成红色 ✕，点击即可关闭。</string>
+    <string name="settings_bubble_hint">后台服务运行时，TA 悬浮球会浮在屏幕上：点击打开翻译面板，长按打开快捷菜单（暂停、语言、设置、隐藏、退出），拖动可移动。有译文显示时它会变成红色 ✕，点击即可关闭。</string>
     <string name="settings_developer_hint">开发者：参见 docs/INTEGRATION.md 了解如何绑定服务并接收 JSON。</string>
 
     <string name="settings_section_status">状态</string>
@@ -113,4 +113,29 @@
 
     <string name="bubble_translate_screen">翻译屏幕</string>
     <string name="bubble_clear_translation">清除译文</string>
+
+    <!-- Overlay bubble, panel and quick menu -->
+    <string name="settings_section_source_language">原文语言</string>
+    <string name="panel_title">翻译屏幕</string>
+    <string name="panel_swap_languages">切换语言</string>
+    <string name="panel_realtime_title">实时翻译</string>
+    <string name="panel_realtime_subtitle">屏幕变化时自动翻译</string>
+    <string name="panel_mode_title">显示方式</string>
+    <string name="panel_mode_parallel">并排显示</string>
+    <string name="panel_mode_parallel_desc">保留原文，译文在下方</string>
+    <string name="panel_mode_replace">替换</string>
+    <string name="panel_mode_replace_desc">用译文覆盖原文</string>
+    <string name="panel_advanced">高级设置</string>
+    <string name="panel_start">开始翻译</string>
+    <string name="menu_status_active">运行中</string>
+    <string name="menu_status_translating">翻译中…</string>
+    <string name="menu_status_idle">待机</string>
+    <string name="menu_pause">暂停翻译</string>
+    <string name="menu_language">选择语言</string>
+    <string name="menu_hide_bubble">隐藏悬浮球</string>
+    <string name="menu_exit">退出</string>
+    <string name="overlay_banner_title">译文（%1$s）</string>
+    <string name="bubble_open_panel">打开翻译面板</string>
+    <string name="notif_open_hint">请从正在显示的通知中打开 VDubbing。</string>
+    <string name="bubble_translating">正在翻译屏幕…</string>
 </resources>

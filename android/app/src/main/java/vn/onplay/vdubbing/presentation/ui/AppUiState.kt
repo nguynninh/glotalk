@@ -3,6 +3,7 @@ package vn.onplay.vdubbing.presentation.ui
 import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 import vn.onplay.vdubbing.domain.model.AppLanguage
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 import vn.onplay.vdubbing.domain.model.Translation
@@ -30,7 +31,11 @@ data class AppUiState(
     val notificationsGranted: Boolean = false,
     val cloudEnabled: Boolean = false,
     val savedKey: String = "",
+    /** What the screen is assumed to be in; AUTO asks the translator to detect it. */
+    val sourceLanguage: Language = Language.AUTO,
     val targetLanguage: Language = Language.VIETNAMESE,
+    /** Parallel (original kept) or replace (covered) — see [DisplayMode]. */
+    val displayMode: DisplayMode = DisplayMode.REPLACE,
     val autoTranslate: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val appLanguage: AppLanguage = AppLanguage.SYSTEM,

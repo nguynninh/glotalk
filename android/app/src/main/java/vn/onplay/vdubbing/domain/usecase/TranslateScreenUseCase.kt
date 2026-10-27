@@ -106,7 +106,15 @@ class TranslateScreenUseCase(
         if (blocks.isEmpty()) throw TranslationException.NoTextFound()
 
         val source = if (requestedSource == Language.AUTO) {
-            translator.detect(blocks.joinToString(" ") { it.original })
+            val detected = translator.detect(blocks.joinToString(" ") { it.original })
+            if (detected.isTranslatable && detected != target) {
+                detected
+            } else {
+                // When language detection returns UNKNOWN (e.g. langid model downloading or low confidence)
+                // or matches target language, check OCR blocks or fall back to English for Latin text.
+                blocks.map { it.language }.firstOrNull { it.isTranslatable && it != target }
+                    ?: Language.ENGLISH
+            }
         } else {
             requestedSource
         }

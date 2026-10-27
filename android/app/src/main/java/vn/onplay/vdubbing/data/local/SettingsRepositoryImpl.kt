@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 import vn.onplay.vdubbing.domain.model.AppLanguage
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 import vn.onplay.vdubbing.domain.repository.SettingsRepository
@@ -38,6 +39,16 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         get() = prefs.getBoolean(KEY_AUTO, false)
         set(value) = prefs.edit { putBoolean(KEY_AUTO, value) }
 
+    /** AUTO until the user names the screen's language: it is the honest default. */
+    override var sourceLanguage: Language
+        get() = Language.fromCode(prefs.getString(KEY_SOURCE, Language.AUTO.code))
+            .takeIf { it == Language.AUTO || it in Language.TARGETS } ?: Language.AUTO
+        set(value) = prefs.edit { putString(KEY_SOURCE, value.code) }
+
+    override var displayMode: DisplayMode
+        get() = DisplayMode.fromCode(prefs.getString(KEY_DISPLAY_MODE, null))
+        set(value) = prefs.edit { putString(KEY_DISPLAY_MODE, value.code) }
+
     /** Defaults to following the device; the app never forces a theme unasked. */
     override var themeMode: ThemeMode
         get() = ThemeMode.fromCode(prefs.getString(KEY_THEME_MODE, ThemeMode.SYSTEM.code))
@@ -55,6 +66,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         const val KEY_GEMINI_KEY = "gemini_key"
         const val KEY_CLOUD_ENABLED = "cloud_fallback_enabled"
         const val KEY_TARGET = "target_language"
+        const val KEY_SOURCE = "source_language"
+        const val KEY_DISPLAY_MODE = "display_mode"
         const val KEY_AUTO = "auto_translate"
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_APP_LANGUAGE = "app_language"

@@ -23,6 +23,13 @@ enum class Language(val code: String, val label: String, val script: Script) {
         /** Offered as translation targets, in picker order. */
         val TARGETS: List<Language> = listOf(VIETNAMESE, ENGLISH, JAPANESE, KOREAN, CHINESE)
 
+        /**
+         * Offered as source languages: everything we can name, plus detection.
+         * It is the same list a target may be, because reading a page in a
+         * language and writing into it are symmetric choices.
+         */
+        val SOURCES: List<Language> = listOf(AUTO) + TARGETS
+
         fun fromCode(code: String?): Language {
             val base = code?.substringBefore('-')?.lowercase()
             return entries.firstOrNull { it.code == base } ?: UNKNOWN

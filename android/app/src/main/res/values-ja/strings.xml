@@ -35,7 +35,7 @@
 
     <string name="settings_section_diagnostics">ユーザー補助の診断</string>
     <string name="settings_diagnostics_hint">設定で有効にしたのに上の行が「オフ」のままの場合は、下の 2 つの値を比べてください。システムが保存しているサービス名と、このアプリが探している名前が分かります。</string>
-    <string name="settings_bubble_hint">バックグラウンドサービスが動作中は 文A のバブルが画面に浮かびます。タップで翻訳、ドラッグで移動。翻訳の表示中は赤い ✕ に変わり、タップで閉じます。</string>
+    <string name="settings_bubble_hint">バックグラウンドサービスが動作中は TA のバブルが画面に浮かびます。タップで翻訳パネル、長押しでクイックメニュー（一時停止、言語、設定、非表示、終了）、ドラッグで移動。翻訳の表示中は赤い ✕ に変わり、タップで閉じます。</string>
     <string name="settings_developer_hint">開発者向け: サービスのバインドと JSON の受け取り方は docs/INTEGRATION.md を参照してください。</string>
 
     <string name="settings_section_status">状態</string>
@@ -113,4 +113,29 @@
 
     <string name="bubble_translate_screen">画面を翻訳</string>
     <string name="bubble_clear_translation">翻訳を消去</string>
+
+    <!-- Overlay bubble, panel and quick menu -->
+    <string name="settings_section_source_language">元の言語</string>
+    <string name="panel_title">画面を翻訳</string>
+    <string name="panel_swap_languages">言語を入れ替える</string>
+    <string name="panel_realtime_title">リアルタイム翻訳</string>
+    <string name="panel_realtime_subtitle">画面が変わったら自動で翻訳</string>
+    <string name="panel_mode_title">表示モード</string>
+    <string name="panel_mode_parallel">並べて表示</string>
+    <string name="panel_mode_parallel_desc">原文を残して下に訳文</string>
+    <string name="panel_mode_replace">置き換え</string>
+    <string name="panel_mode_replace_desc">原文を訳文で覆う</string>
+    <string name="panel_advanced">詳細設定</string>
+    <string name="panel_start">翻訳を開始</string>
+    <string name="menu_status_active">動作中</string>
+    <string name="menu_status_translating">翻訳中…</string>
+    <string name="menu_status_idle">待機中</string>
+    <string name="menu_pause">翻訳を一時停止</string>
+    <string name="menu_language">言語を選択</string>
+    <string name="menu_hide_bubble">バブルを隠す</string>
+    <string name="menu_exit">終了</string>
+    <string name="overlay_banner_title">翻訳（%1$s）</string>
+    <string name="bubble_open_panel">翻訳パネルを開く</string>
+    <string name="notif_open_hint">表示中の通知から VDubbing を開いてください。</string>
+    <string name="bubble_translating">画面を翻訳しています…</string>
 </resources>

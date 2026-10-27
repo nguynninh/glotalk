@@ -38,7 +38,7 @@
 
     <string name="settings_section_diagnostics">Chẩn đoán Trợ năng</string>
     <string name="settings_diagnostics_hint">Nếu bạn đã bật trong Cài đặt mà mục trên vẫn báo chưa bật, đối chiếu hai dòng dưới đây — chúng cho biết hệ thống lưu tên service là gì so với tên app tìm.</string>
-    <string name="settings_bubble_hint">Bong bóng 文A nổi trên màn hình khi service nền chạy: chạm để dịch, kéo để dời. Khi đang có bản dịch nó chuyển thành ✕ đỏ để tắt.</string>
+    <string name="settings_bubble_hint">Bong bóng chữ TA nổi trên màn hình khi service nền chạy: chạm để mở bảng dịch, nhấn giữ để mở menu nhanh (tạm dừng, ngôn ngữ, cài đặt, ẩn, thoát), kéo để dời. Khi đang có bản dịch nó chuyển thành ✕ đỏ để tắt.</string>
     <string name="settings_developer_hint">Nhà phát triển: xem docs/INTEGRATION.md để bind service và nhận JSON.</string>
 
     <string name="settings_section_status">Trạng thái</string>
@@ -119,4 +119,29 @@
     <!-- Overlay bubble -->
     <string name="bubble_translate_screen">Dịch màn hình</string>
     <string name="bubble_clear_translation">Xoá bản dịch</string>
+
+    <!-- Overlay bubble, panel and quick menu -->
+    <string name="settings_section_source_language">Ngôn ngữ nguồn</string>
+    <string name="panel_title">Dịch màn hình</string>
+    <string name="panel_swap_languages">Hoán đổi ngôn ngữ</string>
+    <string name="panel_realtime_title">Dịch realtime</string>
+    <string name="panel_realtime_subtitle">Tự dịch khi màn hình thay đổi</string>
+    <string name="panel_mode_title">Chế độ hiển thị</string>
+    <string name="panel_mode_parallel">Song song</string>
+    <string name="panel_mode_parallel_desc">Giữ chữ gốc, bản dịch ở dưới</string>
+    <string name="panel_mode_replace">Thay thế</string>
+    <string name="panel_mode_replace_desc">Bản dịch đè lên chữ gốc</string>
+    <string name="panel_advanced">Cài đặt nâng cao</string>
+    <string name="panel_start">Bắt đầu dịch</string>
+    <string name="menu_status_active">Đang hoạt động</string>
+    <string name="menu_status_translating">Đang dịch…</string>
+    <string name="menu_status_idle">Đang chờ</string>
+    <string name="menu_pause">Tạm dừng dịch</string>
+    <string name="menu_language">Chọn ngôn ngữ</string>
+    <string name="menu_hide_bubble">Ẩn bong bóng</string>
+    <string name="menu_exit">Thoát</string>
+    <string name="overlay_banner_title">Bản dịch (%1$s)</string>
+    <string name="bubble_open_panel">Mở bảng dịch</string>
+    <string name="notif_open_hint">Mở VDubbing từ thông báo đang hiển thị.</string>
+    <string name="bubble_translating">Đang dịch màn hình…</string>
 </resources>

@@ -9,6 +9,7 @@ import vn.onplay.vdubbing.data.mlkit.OcrRepositoryImpl
 import vn.onplay.vdubbing.data.mlkit.TranslationRepositoryImpl
 import vn.onplay.vdubbing.data.remote.GeminiTranslationRepository
 import vn.onplay.vdubbing.data.repository.ScreenCaptureRepositoryImpl
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.TextBlock
 import vn.onplay.vdubbing.domain.usecase.TranslateScreenUseCase
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
@@ -47,12 +48,34 @@ class AppContainer(context: Context) {
             AccessibilityBridge.service?.overlayRenderer?.hide()
         }
 
+        override val hasTranslation: Boolean
+            get() = AccessibilityBridge.service?.overlayRenderer?.hasTranslation == true
+
+        override val translationShownTime: Long
+            get() = AccessibilityBridge.service?.overlayRenderer?.translationShownTime ?: 0L
+
         override fun showBubble(onTranslate: () -> Unit) {
             AccessibilityBridge.service?.overlayRenderer?.showBubble(onTranslate)
         }
 
         override fun hideBubble() {
             AccessibilityBridge.service?.overlayRenderer?.hideBubble()
+        }
+
+        override fun setBusy(busy: Boolean) {
+            AccessibilityBridge.service?.overlayRenderer?.setBusy(busy)
+        }
+
+        override fun setDisplayMode(mode: DisplayMode) {
+            AccessibilityBridge.service?.overlayRenderer?.setDisplayMode(mode)
+        }
+
+        override fun refresh() {
+            AccessibilityBridge.service?.overlayRenderer?.refresh()
+        }
+
+        override fun dismissTransientWindows() {
+            AccessibilityBridge.service?.overlayRenderer?.dismissTransientWindows()
         }
     }
 

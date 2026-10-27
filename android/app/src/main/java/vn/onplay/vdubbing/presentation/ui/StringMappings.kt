@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.domain.model.AppLanguage
+import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 import vn.onplay.vdubbing.domain.model.TranslationEngine
@@ -26,6 +27,12 @@ fun TranslationErrorCode.messageRes(): Int = when (this) {
     TranslationErrorCode.CLOUD_QUOTA_EXCEEDED -> R.string.error_quota
     TranslationErrorCode.OFFLINE -> R.string.error_offline
     TranslationErrorCode.BUSY -> R.string.error_busy
+}
+
+@StringRes
+fun DisplayMode.labelRes(): Int = when (this) {
+    DisplayMode.PARALLEL -> R.string.panel_mode_parallel
+    DisplayMode.REPLACE -> R.string.panel_mode_replace
 }
 
 @StringRes
