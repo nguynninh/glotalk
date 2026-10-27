@@ -43,14 +43,8 @@ back over the original words. Other apps can ask it to translate over AIDL.
 ./gradlew assembleDebug
 ```
 
-The APK lands in `app/build/outputs/apk/debug/`. A JDK is required — Android
-Studio's bundled one works, and `local.properties` must point `sdk.dir` at an
-installed Android SDK (compile SDK 36). The Gradle wrapper (9.5) and the Android
-Gradle plugin (9.3.3) come with the project.
-
-```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
+The APK lands in `app/build/outputs/apk/debug/`. Requirements, the full command
+list, and the verification caveats are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Using it
 
@@ -85,53 +79,19 @@ through — permission, binding, JSON schema, error table and limits such as
 `FLAG_SECURE` — is in `docs/INTEGRATION.md`. Note that `.gitignore` excludes
 `/docs`, so that file exists only in a local checkout.
 
-## How it is put together
-
-```
-app/src/main/
-  aidl/vn/onplay/vdubbing/    ITranslationService, ITranslationCallback
-  java/vn/onplay/vdubbing/
-    domain/                   models, repository contracts, TranslateScreenUseCase
-    data/                     ML Kit OCR + translation, Gemini, settings, capture store
-    framework/
-      accessibility/          capture, screenshot, foreground tracking, bridge
-      overlay/                bubble, panel, menu, translated text
-      service/                TranslateService (foreground + AIDL), JSON shaping
-      locale/                 per-app language controller
-    presentation/             ViewModel, UI state, SettingsScreen (Compose)
-    di/                       AppContainer — the hand-rolled composition root
-  res/                        strings in vi (default), en, ja, ko, zh-rCN
-```
-
-The pipeline lives in `TranslateScreenUseCase` and nowhere else: local OCR is
-used when it read enough of the screen, the cloud is tried when it did not, and
-a cloud failure that is not a key or quota problem still returns the local
-result. Everything below it — pixels, Binder, ML Kit, windows — is behind
-interfaces, so the use case is unit-tested without an emulator.
-
-The overlay is four separate windows rather than one. The translated text window
-is `FLAG_NOT_TOUCHABLE`, so taps pass through to the app underneath; the bubble,
-panel and menu each get their own small window, because a touchable window
-covering the screen would make the phone unusable.
-
-## Tests
+## Tests and contributing
 
 ```bash
 ./gradlew testDebugUnitTest
 ```
 
-18 JVM unit tests cover `TranslateScreenUseCase` (engine selection, cloud
-fallback, self-overlay suppression, error paths) and `AppLanguage` tag mapping.
-Nothing else is automated: the overlay, the service and the accessibility
-behaviour need a device, and none of it is covered by tests.
+23 JVM unit tests cover `TranslateScreenUseCase`, `VerticalBands` and `AppLanguage`
+tag mapping. The overlay, the service and the AIDL path need a device and are
+covered by no automated test.
 
-## Verification state
-
-The 18 unit tests were not run while this document was written: `./gradlew` needs
-to write under `~/.gradle` and open a local socket, both of which this sandbox
-blocks. Run them yourself with the command above. Nothing in this README was
-verified on a device — the overlay behaviour, the service and the AIDL path are
-described from the source, not from a run.
+Module layout, the pipeline's rules, invariants, the release procedure and what
+each Gradle command actually proves are in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Limitations
 

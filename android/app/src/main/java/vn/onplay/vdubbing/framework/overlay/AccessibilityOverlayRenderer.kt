@@ -143,9 +143,10 @@ class AccessibilityOverlayRenderer(
         if (textScreenWidth <= 0 || textScreenHeight <= 0) return
 
         val container = FrameLayout(service)
-        val bands = VerticalBands.of(textBlocks, ::shouldDraw, textScreenHeight)
+        val rows = VerticalBands.of(textBlocks, ::shouldDraw, textScreenHeight)
+        val columns = HorizontalBands.of(textBlocks, ::shouldDraw, textScreenWidth)
         val skipped = textBlocks.indices.count { index ->
-            addLine(container, textBlocks[index], bands[index]).not()
+            addLine(container, textBlocks[index], rows[index], columns[index]).not()
         }
         if (skipped > 0) {
             Log.w(TAG, "skipped $skipped/${textBlocks.size} lines (no translation or same as original)")
@@ -196,7 +197,12 @@ class AccessibilityOverlayRenderer(
     }
 
     /** @return true when the line was drawn. */
-    private fun addLine(container: FrameLayout, block: TextBlock, band: Band): Boolean {
+    private fun addLine(
+        container: FrameLayout,
+        block: TextBlock,
+        row: Band,
+        column: Band,
+    ): Boolean {
         if (!shouldDraw(block)) return false
         val text = block.text.trim()
 
@@ -208,22 +214,33 @@ class AccessibilityOverlayRenderer(
         val platePadH = if (replace) ui.px(PLATE_PAD_DP) else 0
         val platePadV = if (replace) ui.px(PLATE_PAD_V_DP) else 0
 
+        // The column is the hard limit: a nav label whose translation runs long
+        // must wrap or shrink, not spread over the labels beside it. The gutter
+        // on each side keeps a grown block a visible step away from whatever the
+        // band shares its edge with, so the two never read as one run of text.
+        val gutter = ui.px(BAND_GUTTER_DP)
+        val room = (column.end - column.start - gutter * 2).coerceAtLeast(1)
         val width = (block.width + platePadH * 2)
             .coerceIn(ui.px(MIN_TEXT_WIDTH_DP), textScreenWidth)
+            .coerceAtMost(room)
         val textWidth = (width - platePadH * 2).coerceAtLeast(ui.px(8f))
 
-        val room = (band.bottom - band.top).coerceAtLeast(1)
+        val heightRoom = (row.end - row.start).coerceAtLeast(1)
         val maxHeight = if (replace) {
             (block.height * REPLACE_HEIGHT_RATIO).toInt()
                 .coerceAtLeast((preferredSize * 1.3f).toInt())
-                .coerceAtMost(room)
+                .coerceAtMost(heightRoom)
         } else {
             (block.height * PARALLEL_HEIGHT_GROWTH).toInt()
                 .coerceAtLeast((preferredSize * 1.6f).toInt())
-                .coerceAtMost(room)
+                .coerceAtMost(heightRoom)
         }
 
         val left = (block.left - platePadH)
+            .coerceIn(
+                column.start + gutter,
+                (column.end - width - gutter).coerceAtLeast(column.start + gutter),
+            )
             .coerceIn(0, (textScreenWidth - width).coerceAtLeast(0))
 
         val isParagraph = block.lineCount > 1 || block.original.length > 40
@@ -264,13 +281,13 @@ class AccessibilityOverlayRenderer(
         } else {
             contentHeight + view.verticalSlack
         }
-        val viewHeight = naturalHeight.coerceAtMost(room)
+        val viewHeight = naturalHeight.coerceAtMost(heightRoom)
 
         val top = if (replace) {
             block.top + block.height / 2 - viewHeight / 2
         } else {
             block.top + block.height - contentHeight / 4
-        }.coerceIn(band.top, (band.bottom - viewHeight).coerceAtLeast(band.top))
+        }.coerceIn(row.start, (row.end - viewHeight).coerceAtLeast(row.start))
 
         container.addView(
             view,
@@ -1116,6 +1133,8 @@ class AccessibilityOverlayRenderer(
         /** Room for the outline and a slightly longer word either side. */
         const val OUTLINE_SLACK_DP = 6f
         const val PLATE_PAD_DP = 6f
+        /** Clear space kept between a grown block and the edge of its band. */
+        const val BAND_GUTTER_DP = 2f
         const val PLATE_PAD_V_DP = 2f
         const val PLATE_RADIUS_DP = 2f
         const val REPLACE_HEIGHT_RATIO = 1.6f

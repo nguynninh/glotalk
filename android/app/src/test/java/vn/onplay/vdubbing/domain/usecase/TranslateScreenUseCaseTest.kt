@@ -239,6 +239,35 @@ class TranslateScreenUseCaseTest {
 
         assertEquals(Language.AUTO, result.source)
     }
+
+    @Test
+    fun `a page already in the target language is not translated`() = runTest {
+        val capture = FakeCapture()
+        var asked = 0
+        val translator = object : TranslationRepository {
+            override suspend fun detect(text: String) = Language.VIETNAMESE
+            override suspend fun translate(
+                lines: List<String>,
+                source: Language,
+                target: Language,
+            ): List<String> {
+                asked++
+                return lines
+            }
+        }
+
+        val result = useCase(
+            capture = capture,
+            ocr = FakeOcr(listOf(block("Cũng Xuyên Khê Như Bảo"))),
+            translator = translator,
+        ).invoke(Language.AUTO, Language.VIETNAMESE)
+
+        // Running Vietnamese through the translator anyway is what produced
+        // "Cừng Dễu" over words that were already correct.
+        assertEquals(0, asked)
+        assertEquals(Language.VIETNAMESE, result.source)
+        assertEquals("Cũng Xuyên Khê Như Bảo", result.blocks.single().translated)
+    }
 }
 
 /** Nested fakes cannot see outer members, so this stays top-level. */

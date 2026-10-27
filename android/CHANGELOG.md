@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-27
+
+### Fixed
+
+- **Translated text no longer overlaps its neighbours.** A translation is
+  routinely longer than the words it replaces, and nothing limited it: a long
+  paragraph covered the heading above it, a long tab label spread across the
+  labels beside it, and a bit of both in the bottom navigation bar. Every block
+  is now confined to its own band on both axes, ending halfway into the gap to
+  each neighbour, and only blocks that actually touch along the other axis count
+  as neighbours — two columns of text at the same height no longer constrain each
+  other vertically, and one row of text no longer constrains another row
+  horizontally.
+- **Text left untranslated still holds its place.** A block whose translation
+  came back identical to the original is not drawn, because painting it over
+  itself would only blur the words. Such a block was also dropped when working
+  out its neighbours' limits, so the block beside it grew straight into the
+  untouched original words — a tab bar read as "Video" fused to the next label's
+  translation. Those blocks now hold their space like any other.
+- **A gap between a grown block and its neighbour.** Translated text that had to
+  widen stops a small distance short of the edge it shares with the next block,
+  so the two never read as one run of text.
+- The line count the translation layout is limited to now includes the
+  line-spacing multiplier. Measuring the font alone under-counted the line pitch
+  by 15%, which let a block lay out taller than the box it was drawn in and spill
+  onto its neighbour even when its height was otherwise correct.
+
 ## [1.0.1] - 2026-10-27
 
 ### Fixed
@@ -81,6 +108,7 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/nguynninh/v-dubbing/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nguynninh/v-dubbing/releases/tag/v1.0.0

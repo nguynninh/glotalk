@@ -106,29 +106,49 @@ class TranslateScreenUseCase(
         if (blocks.isEmpty()) throw TranslationException.NoTextFound()
 
         val source = if (requestedSource == Language.AUTO) {
-            val detected = translator.detect(blocks.joinToString(" ") { it.original })
-            if (detected.isTranslatable && detected != target) {
-                detected
-            } else {
-                // When language detection returns UNKNOWN (e.g. langid model downloading or low confidence)
-                // or matches target language, check OCR blocks or fall back to English for Latin text.
-                blocks.map { it.language }.firstOrNull { it.isTranslatable && it != target }
-                    ?: Language.ENGLISH
-            }
+            resolveSource(blocks)
         } else {
             requestedSource
         }
 
-        val lines = when {
-            !source.isTranslatable -> blocks.map { it.original }
-            source == target -> blocks.map { it.original }
-            else -> translator.translate(blocks.map { it.original }, source, target)
+        // Nothing to translate: the page is already in the target language.
+        // Running it through the translator anyway means the wrong language
+        // pair, which drew mangled words over text that was already correct.
+        // The blocks still go to the overlay so a translation left from the
+        // previous screen is cleared; the renderer skips lines it would redraw
+        // identically.
+        if (source == target) {
+            return finish(blocks, TranslationEngine.ON_DEVICE, source, target, showOverlay)
+        }
+
+        val lines = if (!source.isTranslatable) {
+            blocks.map { it.original }
+        } else {
+            translator.translate(blocks.map { it.original }, source, target)
         }
 
         val merged = blocks.mapIndexed { index, block ->
             block.copy(translated = lines.getOrElse(index) { block.original })
         }
         return finish(merged, TranslationEngine.ON_DEVICE, source, target, showOverlay)
+    }
+
+    /**
+     * The screen's language when the user left the source on AUTO.
+     *
+     * Detection needs enough text and a downloaded model, so it answers UNKNOWN
+     * on a short or first-run screen; the OCR's per-block language is the
+     * fallback then. A detected language is returned as found, even when it is
+     * the target: the old code rejected that answer, translated from English
+     * instead, and so fed Vietnamese to the en→vi model, which drew mangled
+     * words ("Cừng Dễu" for "Cũng đều") over text that was already correct.
+     */
+    private suspend fun resolveSource(blocks: List<TextBlock>): Language {
+        val detected = translator.detect(blocks.joinToString(" ") { it.original })
+        if (detected.isTranslatable) return detected
+
+        return blocks.map { it.language }.firstOrNull { it.isTranslatable }
+            ?: Language.ENGLISH
     }
 
     private fun finish(
