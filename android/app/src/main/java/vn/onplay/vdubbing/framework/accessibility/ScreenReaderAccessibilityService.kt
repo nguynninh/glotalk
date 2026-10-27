@@ -183,7 +183,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
                     if (software == null) {
                         cont.resumeWithException(IllegalStateException("screenshot had no pixels"))
                     } else {
-                        cont.resume(software)
+                        cont.resume(software) { _, bitmap, _ -> bitmap.recycle() }
                     }
                 }
 

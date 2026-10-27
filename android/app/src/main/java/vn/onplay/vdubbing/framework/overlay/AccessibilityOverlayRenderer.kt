@@ -11,9 +11,7 @@ import android.view.View
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.view.WindowManager
 import android.widget.FrameLayout
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
-import android.widget.Switch
 import android.widget.TextView
 import kotlin.math.abs
 import vn.onplay.vdubbing.R
@@ -45,6 +43,10 @@ class AccessibilityOverlayRenderer(
         service.getSystemService(AccessibilityService.WINDOW_SERVICE) as WindowManager
 
     private val ui = OverlayUi(service)
+    private val panelViews = OverlayPanelContent(service, ui, { host }, ::closePanel, ::refreshPanel) {
+        onTranslateTap?.invoke()
+    }
+    private val menuViews = OverlayMenuContent(service, ui)
 
     /** Set by the foreground service; null while it is not running. */
     var host: OverlayHost? = null
@@ -61,13 +63,6 @@ class AccessibilityOverlayRenderer(
     private var textScreenWidth = 0
     private var textScreenHeight = 0
     private var textMode: DisplayMode = DisplayMode.REPLACE
-    /** What the open panel was built from, so a redraw keeps the language picker open. */
-    private var panelState: PanelState? = null
-    /** The language whose choices are showing, or null when the picker is closed. */
-    private var picker: Picker? = null
-    private var pickerStrip: View? = null
-
-    private enum class Picker { SOURCE, TARGET }
 
     // --- bubble ------------------------------------------------------------
     private var bubble: FrameLayout? = null
@@ -82,7 +77,6 @@ class AccessibilityOverlayRenderer(
 
     // --- panel, menu -------------------------------------------------------
     private var panel: View? = null
-    private var panelCard: LinearLayout? = null
     private var menu: View? = null
 
     /** Fallback for the panel's start button when no service is attached. */
@@ -99,7 +93,6 @@ class AccessibilityOverlayRenderer(
     override fun show(blocks: List<TextBlock>, screenWidth: Int, screenHeight: Int) {
         if (blocks.isEmpty()) return
         textBlocks = blocks
-        panelState = null
         textScreenWidth = screenWidth
         textScreenHeight = screenHeight
         host?.panelState()?.let { textMode = it.displayMode }
@@ -167,7 +160,16 @@ class AccessibilityOverlayRenderer(
         edgeToEdge(params)
 
         runCatching { windowManager.addView(container, params) }
-            .onSuccess { textRoot = container }
+            .onSuccess {
+                textRoot = container
+                // Separate windows stack by insertion order; elevation cannot lift the bubble above text.
+                bubble?.let { view ->
+                    runCatching {
+                        windowManager.removeViewImmediate(view)
+                        windowManager.addView(view, bubbleParams)
+                    }.onFailure { Log.e(TAG, "bubble window refused", it) }
+                }
+            }
             // Swallowed before, which is how an entire translation could vanish
             // with no trace in the log.
             .onFailure { Log.e(TAG, "text window refused", it) }
@@ -470,300 +472,29 @@ class AccessibilityOverlayRenderer(
     }
 
     private fun openPanel() {
-        picker = null
         closePanel()
         closeMenu()
         val state = host?.panelState() ?: PanelState()
-        panelState = state
         val card = buildPanelCard(state)
         val scrim = scrim(card, alignTop = bubbleAtTop()) { closePanel() }
         runCatching { windowManager.addView(scrim, scrimParams()) }
             .onSuccess {
                 panel = scrim
-                panelCard = card
             }
     }
 
     private fun closePanel() {
         panel?.let { runCatching { windowManager.removeView(it) } }
         panel = null
-        panelCard = null
-        panelState = null
-        picker = null
-        pickerStrip = null
+        panelViews.reset()
     }
 
-    private fun buildPanelCard(state: PanelState): LinearLayout {
-        val card = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ui.rounded(Overlay.SURFACE, 24f)
-            elevation = ui.px(8f).toFloat()
-            setPadding(ui.px(20f), ui.px(18f), ui.px(20f), ui.px(18f))
-        }
+    private fun buildPanelCard(state: PanelState): LinearLayout = panelViews.build(state)
 
-        // Header: title, then the close that the scrim would also do.
-        card.addView(header(ui.string(R.string.panel_title)) { closePanel() })
-        card.addView(gap(16f))
-
-        // Language pair. A strip of choices replaces the two chips in place
-        // after a tap — no second window, which would fight this one for focus.
-        card.addView(
-            LinearLayout(service).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(
-                    languageChip(state.source) {
-                        openLanguagePicker(card, state.source, Language.SOURCES, isSource = true)
-                    },
-                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f),
-                )
-                addView(
-                    ui.icon(R.drawable.ic_overlay_swap, 20f, Overlay.MUTED).apply {
-                        setPadding(ui.px(8f), 0, ui.px(8f), 0)
-                        contentDescription = ui.string(R.string.panel_swap_languages)
-                        isClickable = true
-                        setOnClickListener {
-                            // Swapping a detected source makes no sense: there is
-                            // nothing to name on the other side.
-                            if (state.source != Language.AUTO) {
-                                host?.onSourceLanguage(state.target)
-                                host?.onTargetLanguage(state.source)
-                            }
-                            refreshPanel()
-                        }
-                    },
-                )
-                addView(
-                    languageChip(state.target) {
-                        openLanguagePicker(card, state.target, Language.TARGETS, isSource = false)
-                    },
-                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f),
-                )
-            },
-        )
-
-        // Re-open the picker that was showing, so rebuilding the panel after a
-        // pick does not close it under the user's finger.
-        when (picker) {
-            Picker.SOURCE ->
-                openLanguagePicker(card, state.source, Language.SOURCES, isSource = true)
-            Picker.TARGET ->
-                openLanguagePicker(card, state.target, Language.TARGETS, isSource = false)
-            null -> Unit
-        }
-
-        card.addView(gap(16f))
-        card.addView(divider())
-        card.addView(gap(4f))
-
-        // Realtime translation.
-        card.addView(
-            LinearLayout(service).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = ui.px(58f)
-                addView(
-                    column(
-                        ui.text(ui.string(R.string.panel_realtime_title), 16f, Overlay.TEXT),
-                        ui.text(
-                            ui.string(R.string.panel_realtime_subtitle),
-                            12f,
-                            Overlay.MUTED,
-                            maxLines = 1,
-                        ),
-                    ),
-                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f),
-                )
-                addView(
-                    Switch(service).apply {
-                        isChecked = state.autoTranslate
-                        // Redrawn after the change so the subtitle reflects it;
-                        // rebuilding from the event would re-enter this switch.
-                        setOnCheckedChangeListener { _, checked ->
-                            host?.onAutoTranslate(checked)
-                            post { refreshPanel() }
-                        }
-                    },
-                )
-            },
-        )
-
-        card.addView(divider())
-        card.addView(gap(14f))
-
-        // Display mode.
-        card.addView(ui.text(ui.string(R.string.panel_mode_title), 15f, Overlay.TEXT, bold = true))
-        card.addView(gap(10f))
-        card.addView(
-            LinearLayout(service).apply {
-                orientation = LinearLayout.HORIZONTAL
-                addView(
-                    modeCard(
-                        iconRes = R.drawable.ic_overlay_parallel,
-                        title = ui.string(R.string.panel_mode_parallel),
-                        subtitle = ui.string(R.string.panel_mode_parallel_desc),
-                        selected = state.displayMode == DisplayMode.PARALLEL,
-                    ) {
-                        host?.onDisplayMode(DisplayMode.PARALLEL)
-                        refreshPanel()
-                    },
-                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-                        rightMargin = ui.px(6f)
-                    },
-                )
-                addView(
-                    modeCard(
-                        iconRes = R.drawable.ic_overlay_replace,
-                        title = ui.string(R.string.panel_mode_replace),
-                        subtitle = ui.string(R.string.panel_mode_replace_desc),
-                        selected = state.displayMode == DisplayMode.REPLACE,
-                    ) {
-                        host?.onDisplayMode(DisplayMode.REPLACE)
-                        refreshPanel()
-                    },
-                    LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-                        leftMargin = ui.px(6f)
-                    },
-                )
-            },
-        )
-
-        card.addView(gap(6f))
-        card.addView(
-            ui.menuRow(
-                iconRes = R.drawable.ic_overlay_settings,
-                label = ui.string(R.string.panel_advanced),
-            ) {
-                closePanel()
-                host?.onOpenAppSettings()
-            }.apply { setPadding(0, 0, 0, 0) },
-        )
-        card.addView(gap(10f))
-
-        // Primary action: start, or a progress label while one is running.
-        card.addView(
-            ui.text(
-                if (state.translating) {
-                    ui.string(R.string.settings_translating)
-                } else {
-                    ui.string(R.string.panel_start)
-                },
-                16f,
-                Color.WHITE,
-                bold = true,
-                maxLines = 1,
-                gravity = Gravity.CENTER,
-            ).apply {
-                gravity = Gravity.CENTER
-                background = ui.rounded(Overlay.BLUE, 26f)
-                minHeight = ui.px(52f)
-                isClickable = true
-                isEnabled = !state.translating
-                alpha = if (state.translating) 0.7f else 1f
-                setOnClickListener {
-                    closePanel()
-                    host?.onStartTranslation() ?: onTranslateTap?.invoke()
-                }
-            },
-        )
-        return card
-    }
-
-    /**
-     * Swaps in a horizontal strip of language choices under the chips, so the
-     * card grows wider than the window rather than being covered by a second
-     * one. Re-opening the panel after a pick rebuilds it in the chosen language.
-     */
-    private fun openLanguagePicker(
-        card: LinearLayout,
-        selected: Language,
-        choices: List<Language>,
-        isSource: Boolean,
-    ) {
-        picker = if (isSource) Picker.SOURCE else Picker.TARGET
-        // Only one strip: a second tap on the other chip moves it, not stacks it.
-        (pickerStrip?.parent as? android.view.ViewGroup)?.removeView(pickerStrip)
-        pickerStrip = null
-        val strip = HorizontalScrollView(service).apply {
-            isHorizontalScrollBarEnabled = false
-            background = ui.rounded(Overlay.CHIP, 14f)
-            setPadding(ui.px(6f), ui.px(6f), ui.px(6f), ui.px(6f))
-            addView(
-                LinearLayout(service).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    choices.forEach { language ->
-                        addView(languageOption(language, language == selected) {
-                            if (isSource) host?.onSourceLanguage(language)
-                            else host?.onTargetLanguage(language)
-                            refreshPanel()
-                        })
-                    }
-                },
-            )
-        }
-        // After the header, the gap and the chip row.
-        card.addView(
-            strip,
-            PICKER_INDEX.coerceAtMost(card.childCount),
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { topMargin = ui.px(12f) },
-        )
-        pickerStrip = strip
-    }
-
-    private fun languageOption(language: Language, selected: Boolean, onClick: () -> Unit): View =
-        ui.text(
-            language.pickerLabel(),
-            13f,
-            if (selected) Color.WHITE else Overlay.TEXT,
-            bold = selected,
-            maxLines = 1,
-        ).apply {
-            background = ui.rounded(if (selected) Overlay.BLUE else Color.TRANSPARENT, 10f)
-            setPadding(ui.px(14f), ui.px(9f), ui.px(14f), ui.px(9f))
-            isClickable = true
-            setOnClickListener { onClick() }
-        }
-
-    private fun languageChip(language: Language, onClick: () -> Unit): View =
-        LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = ui.rounded(Overlay.CHIP, 14f)
-            setPadding(ui.px(10f), ui.px(10f), ui.px(10f), ui.px(10f))
-            isClickable = true
-            addView(
-                ui.text(OverlayUi.badge(language), 10f, Overlay.BLUE, bold = true).apply {
-                    gravity = Gravity.CENTER
-                    background = ui.rounded(Overlay.BLUE_SOFT, 6f)
-                    minWidth = ui.px(26f)
-                    setPadding(ui.px(5f), ui.px(3f), ui.px(5f), ui.px(3f))
-                },
-            )
-            addView(
-                ui.text(language.pickerLabel(), 14f, Overlay.TEXT, bold = true, maxLines = 1)
-                    .apply {
-                        setPadding(ui.px(8f), 0, 0, 0)
-                        layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-                    },
-            )
-            addView(ui.icon(R.drawable.ic_overlay_chevron, 16f, Overlay.MUTED))
-            setOnClickListener { onClick() }
-        }
-
-    /**
-     * Rebuilds the panel in place after a choice, keeping whatever picker was
-     * open. Opening a second window instead would replace this one mid-tap.
-     */
+    /** Rebuilds the panel in place, preserving any open dropdown. */
     private fun refreshPanel() {
         if (panel == null) return
         val state = host?.panelState() ?: return
-        panelState = state
-        // The old card must stop being panelCard first, or buildPanelCard would
-        // add a re-opened picker strip to the card being thrown away.
-        panelCard = null
         val card = buildPanelCard(state)
         val wrapper = panelContent() ?: run {
             openPanel()
@@ -777,40 +508,10 @@ class AccessibilityOverlayRenderer(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
             ),
         )
-        panelCard = card
     }
 
     private fun panelContent(): android.view.ViewGroup? =
         (panel as? FrameLayout)?.getChildAt(0) as? android.view.ViewGroup
-
-    private fun modeCard(
-        iconRes: Int,
-        title: String,
-        subtitle: String,
-        selected: Boolean,
-        onClick: () -> Unit,
-    ): View = LinearLayout(service).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-        background = ui.rounded(
-            if (selected) Overlay.BLUE_SOFT else Overlay.SURFACE,
-            14f,
-            if (selected) 2f else 1f,
-            if (selected) Overlay.BLUE else Overlay.BORDER,
-        )
-        setPadding(ui.px(10f), ui.px(14f), ui.px(10f), ui.px(14f))
-        isClickable = true
-        addView(ui.icon(iconRes, 22f, if (selected) Overlay.BLUE else Overlay.MUTED))
-        addView(
-            ui.text(title, 14f, Overlay.TEXT, bold = true, gravity = Gravity.CENTER)
-                .apply { setPadding(0, ui.px(8f), 0, 0) },
-        )
-        addView(
-            ui.text(subtitle, 11f, Overlay.MUTED, gravity = Gravity.CENTER, maxLines = 2)
-                .apply { setPadding(0, ui.px(3f), 0, 0) },
-        )
-        setOnClickListener { onClick() }
-    }
 
     // =======================================================================
     // Quick menu
@@ -820,94 +521,13 @@ class AccessibilityOverlayRenderer(
         closeMenu()
         closePanel()
         val state = host?.panelState() ?: PanelState()
-        val card = LinearLayout(service).apply {
-            orientation = LinearLayout.VERTICAL
-            background = ui.rounded(Overlay.SURFACE, 20f)
-            elevation = ui.px(8f).toFloat()
-            setPadding(ui.px(6f), ui.px(8f), ui.px(6f), ui.px(8f))
-        }
-
-        // Identity and status: which app this bubble belongs to, and what it is
-        // doing right now — the bubble itself has room for neither.
-        card.addView(
-            LinearLayout(service).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(ui.px(12f), ui.px(10f), ui.px(12f), ui.px(14f))
-                addView(ui.bubbleAvatar(14f, ui.px(40f)))
-                addView(
-                    column(
-                        ui.text(ui.string(R.string.panel_title), 16f, Overlay.TEXT, bold = true),
-                        ui.text(
-                            ui.string(
-                                when {
-                                    state.translating -> R.string.menu_status_translating
-                                    state.hasTranslation -> R.string.menu_status_active
-                                    else -> R.string.menu_status_idle
-                                },
-                            ),
-                            12f,
-                            Overlay.MUTED,
-                            maxLines = 1,
-                        ),
-                    ).apply { setPadding(ui.px(12f), 0, 0, 0) },
-                )
-            },
-        )
-        card.addView(divider(inset = 6f))
-
-        // Pause is the contextual action: it is what the menu is for while a
-        // translation is on screen, and it is inert otherwise.
-        card.addView(
-            ui.menuRow(
-                iconRes = if (state.hasTranslation) {
-                    R.drawable.ic_overlay_pause
-                } else {
-                    R.drawable.ic_overlay_translate
-                },
-                label = ui.string(
-                    if (state.hasTranslation) R.string.menu_pause else R.string.panel_start,
-                ),
-            ) {
-                closeMenu()
-                if (state.hasTranslation) hide() else host?.onStartTranslation()
-            },
-        )
-        card.addView(
-            ui.menuRow(
-                iconRes = R.drawable.ic_overlay_language,
-                label = ui.string(R.string.menu_language),
-            ) {
-                closeMenu()
-                openPanel()
-            },
-        )
-        card.addView(
-            ui.menuRow(
-                iconRes = R.drawable.ic_overlay_settings,
-                label = ui.string(R.string.panel_advanced),
-            ) {
-                closeMenu()
-                host?.onOpenAppSettings()
-            },
-        )
-        card.addView(
-            ui.menuRow(
-                iconRes = R.drawable.ic_overlay_hide,
-                label = ui.string(R.string.menu_hide_bubble),
-            ) {
-                closeMenu()
-                hideBubble()
-            },
-        )
-        card.addView(
-            ui.menuRow(
-                iconRes = R.drawable.ic_overlay_exit,
-                label = ui.string(R.string.menu_exit),
-            ) {
-                closeMenu()
-                host?.onStopService()
-            },
+        val card = menuViews.build(
+            state,
+            onToggleTranslation = { closeMenu(); if (state.hasTranslation) hide() else host?.onStartTranslation() },
+            onLanguage = { closeMenu(); openPanel() },
+            onSettings = { closeMenu(); host?.onOpenAppSettings() },
+            onHideBubble = { closeMenu(); hideBubble() },
+            onStopService = { closeMenu(); host?.onStopService() },
         )
 
         val scrim = scrim(card, alignTop = bubbleAtTop()) { closeMenu() }
@@ -992,57 +612,7 @@ class AccessibilityOverlayRenderer(
         PixelFormat.TRANSLUCENT,
     ).apply { gravity = Gravity.TOP or Gravity.START }.let(::edgeToEdge)
 
-    private fun header(title: String, onClose: () -> Unit): View =
-        LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(
-                ui.text(title, 20f, Overlay.TEXT, bold = true)
-                    .apply { layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) },
-            )
-            addView(
-                ui.icon(R.drawable.ic_overlay_close, 20f, Overlay.MUTED).apply {
-                    contentDescription = ui.string(R.string.action_close)
-                    val pad = ui.px(8f)
-                    setPadding(pad, pad, pad, pad)
-                    isClickable = true
-                    setOnClickListener { onClose() }
-                },
-            )
-        }
-
-    private fun gap(dp: Float): View = View(service).apply {
-        layoutParams = LinearLayout.LayoutParams(1, ui.px(dp))
-    }
-
-    private fun divider(inset: Float = 0f): View = View(service).apply {
-        setBackgroundColor(Overlay.DIVIDER)
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            ui.px(1f),
-        ).apply {
-            leftMargin = ui.px(inset)
-            rightMargin = ui.px(inset)
-        }
-    }
-
-    private fun column(vararg children: View): LinearLayout = LinearLayout(service).apply {
-        orientation = LinearLayout.VERTICAL
-        children.forEach { addView(it) }
-    }
-
-    /**
-     * Language names in the chips are endonyms — a language is always written
-     * in itself — except AUTO, which describes the app's behaviour rather than
-     * a language and therefore follows the interface language.
-     */
-    private fun Language.pickerLabel(): String =
-        if (this == Language.AUTO) ui.string(R.string.language_auto) else label
-
     private companion object {
-        /** Slot the picker strip takes: after the header, its gap and the chip row. */
-        const val PICKER_INDEX = 3
-
         const val BUBBLE_DP = 54f
         const val BUBBLE_START_TOP_DP = 132f
         const val LONG_PRESS_MS = 500L

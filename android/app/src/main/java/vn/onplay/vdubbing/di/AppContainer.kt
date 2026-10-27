@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import vn.onplay.vdubbing.data.capture.BitmapCaptureStore
 import vn.onplay.vdubbing.data.local.ConnectivityRepositoryImpl
 import vn.onplay.vdubbing.data.local.SettingsRepositoryImpl
+import vn.onplay.vdubbing.data.local.TranslationHistoryRepositoryImpl
 import vn.onplay.vdubbing.data.mlkit.OcrRepositoryImpl
 import vn.onplay.vdubbing.data.mlkit.TranslationRepositoryImpl
 import vn.onplay.vdubbing.data.remote.GeminiTranslationRepository
@@ -15,10 +16,10 @@ import vn.onplay.vdubbing.domain.usecase.TranslateScreenUseCase
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.accessibility.ScreenCaptureSource
 import vn.onplay.vdubbing.framework.overlay.OverlayRenderer
+import vn.onplay.vdubbing.framework.service.BackgroundStatusStore
 
 /**
- * Hand-rolled composition root — one object, because the graph is a dozen nodes
- * and adding Hilt to an app this size buys nothing but a build step.
+ * Shared engine instances used by services and Hilt's presentation bindings.
  *
  * The overlay renderer depends on the accessibility service, which may not be
  * connected yet, so it is resolved lazily through the bridge.
@@ -27,7 +28,9 @@ class AppContainer(context: Context) {
 
     private val appContext = context.applicationContext
 
+    val backgroundStatus = BackgroundStatusStore()
     val settings = SettingsRepositoryImpl(appContext)
+    val history = TranslationHistoryRepositoryImpl(appContext)
     val captureStore = BitmapCaptureStore()
 
     val ocr = OcrRepositoryImpl(captureStore)

@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.hilt)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -16,10 +18,10 @@ android {
         // AccessibilityService.takeScreenshot() requires API 30.
         minSdk = 30
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "vn.onplay.vdubbing.HiltTestRunner"
 
         buildConfigField(
             "String",
@@ -58,6 +60,12 @@ android {
 }
 
 dependencies {
+    implementation(project(":domain"))
+    implementation(libs.hilt.android)
+    implementation(libs.androidx.hilt.compose)
+    ksp(libs.hilt.compiler)
+    androidTestImplementation(libs.hilt.testing)
+    kspAndroidTest(libs.hilt.compiler)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "VDubbing"
 include(":app")
+include(":domain")

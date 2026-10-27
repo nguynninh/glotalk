@@ -21,6 +21,8 @@ class SystemAccessibilityStatus(private val context: Context) : AccessibilitySta
     private val component: ComponentName
         get() = ComponentName(context, ScreenReaderAccessibilityService::class.java)
 
+    override fun isLive(): Boolean = AccessibilityBridge.isReady
+
     override fun isEnabledInSystemSettings(): Boolean = diagnose().enabled
 
     /** Everything needed to explain a mismatch, including the raw system value. */

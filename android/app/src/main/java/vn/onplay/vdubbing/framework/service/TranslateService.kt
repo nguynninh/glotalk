@@ -1,11 +1,5 @@
 package vn.onplay.vdubbing.framework.service
 
-import android.util.Log
-
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -17,7 +11,6 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.Process
 import android.widget.Toast
-import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,8 +18,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import vn.onplay.vdubbing.ITranslationCallback
-import vn.onplay.vdubbing.ITranslationService
 import vn.onplay.vdubbing.MainActivity
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.VDubbingApp
@@ -35,15 +26,12 @@ import vn.onplay.vdubbing.domain.model.AppLanguage
 import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.Translation
-import vn.onplay.vdubbing.domain.model.TranslationEngine
-import vn.onplay.vdubbing.domain.model.TranslationErrorCode
 import vn.onplay.vdubbing.domain.model.TranslationException
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
 import vn.onplay.vdubbing.framework.overlay.OverlayHost
 import vn.onplay.vdubbing.framework.overlay.PanelState
-import vn.onplay.vdubbing.presentation.BackgroundState
-import vn.onplay.vdubbing.presentation.ui.displayNameRes
+import vn.onplay.vdubbing.domain.model.BackgroundState
 
 /**
  * Foreground, exported entry point for other apps, and the driver for
@@ -60,25 +48,13 @@ class TranslateService : Service(), OverlayHost {
     @Volatile
     private var lastResultJson: String = ""
 
-    @Volatile
-    private var busy = false
+    private val busy: Boolean get() = requests.busy
 
     @Volatile
     private var isRunning = false
 
-    /** Last result as data, so the notification can be redrawn in a new language. */
-    private var lastSuccess: Pair<Int, TranslationEngine>? = null
-
-    /**
-     * A preference change (Android 12 and below) does not recreate a running
-     * service, so its strings would stay in the old language. Redraw what is on
-     * screen when the language changes instead.
-     */
-    private val localeListener: (AppLanguage) -> Unit = {
-        createChannel()
-        val notification = buildNotification(notificationDetail())
-        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
-    }
+    private val notifications by lazy { TranslationNotifications(this) }
+    private val localeListener: (AppLanguage) -> Unit = { notifications.refresh() }
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(AppLocaleController.wrap(base))
@@ -87,17 +63,17 @@ class TranslateService : Service(), OverlayHost {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
-        createChannel()
+        notifications.createChannel()
         startForeground(
-            NOTIFICATION_ID,
-            buildNotification(string(R.string.notif_text)),
+            TranslationNotifications.NOTIFICATION_ID,
+            notifications.buildNotification(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
         AppLocaleController.addListener(localeListener)
-        BackgroundState.shared.value = BackgroundState(
+        container.backgroundStatus.publish(BackgroundState(
             running = true,
             autoTranslate = container.settings.autoTranslate,
-        )
+        ))
         // The accessibility service may not be connected yet; the bridge callback
         // below covers that case.
         AccessibilityBridge.onServiceAvailable = {
@@ -148,14 +124,13 @@ class TranslateService : Service(), OverlayHost {
         AccessibilityBridge.service?.onWindowChanged = null
         AccessibilityBridge.service?.overlayRenderer?.apply {
             host = null
+            setBusy(false)
             hideBubble()
             hide()
         }
-        // Cancel first: an in-flight OCR/HTTP call may still be reading a bitmap,
-        // and clearing the store recycles bitmaps.
+        // Each request releases its own capture after its engine has finished.
         scope.cancel()
-        container.captureStore.clear()
-        BackgroundState.shared.value = BackgroundState(running = false)
+        container.backgroundStatus.publish(BackgroundState(running = false))
         super.onDestroy()
     }
 
@@ -193,42 +168,25 @@ class TranslateService : Service(), OverlayHost {
         }
     }
 
-    private fun translate(
-        target: Language,
-        callback: (Result<Translation>) -> Unit,
-    ) {
-        val source = container.settings.sourceLanguage
-        if (busy) {
-            callback(Result.failure(TranslationException.Busy()))
-            return
-        }
-        busy = true
-        translatedPackage = AccessibilityBridge.service?.foregroundPackage()
-        // The bubble is the only thing visible while another app is in front, so
-        // it is also the only place that can say the work is in progress.
-        AccessibilityBridge.service?.overlayRenderer?.setBusy(true)
-        scope.launch {
-            try {
-                // Our own windows are part of the screenshot. Close them and give
-                // the compositor a frame to actually remove them, or OCR reads the
-                // panel instead of the page.
+    private val requests by lazy {
+        TranslationRequestRunner(
+            scope = scope,
+            execute = { source, target -> container.translateScreen(source, target, ownPackage = packageName) },
+            prepare = {
+                translatedPackage = AccessibilityBridge.service?.foregroundPackage()
                 AccessibilityBridge.service?.overlayRenderer?.dismissTransientWindows()
                 delay(CAPTURE_SETTLE_MS)
-                Log.i("VDubbingService", "translation started")
-                val translation = container.translateScreen(source, target, ownPackage = packageName)
-                Log.i("VDubbingService", "translation finished: ${translation.blocks.size} blocks")
-                lastResultJson = translation.toJson()
-                notifyResult(translation)
-                callback(Result.success(translation))
-            } catch (e: TranslationException) {
-                callback(Result.failure(e))
-            } catch (e: Exception) {
-                callback(Result.failure(TranslationException.TranslationFailed(e.message.orEmpty(), e)))
-            } finally {
-                busy = false
-                AccessibilityBridge.service?.overlayRenderer?.setBusy(false)
-            }
-        }
+            },
+            setBusy = { if (isRunning) AccessibilityBridge.service?.overlayRenderer?.setBusy(it) },
+            onSuccess = {
+                lastResultJson = it.toJson()
+                notifications.notifyResult(it)
+            },
+        )
+    }
+
+    private fun translate(target: Language, callback: (Result<Translation>) -> Unit) {
+        requests.translate(container.settings.sourceLanguage, target, callback)
     }
 
     private var translatedPackage: String? = null
@@ -279,16 +237,14 @@ class TranslateService : Service(), OverlayHost {
     private fun startAutoTranslate() {
         setupAccessibilityCallbacks()
         scheduleAutoTranslate(0)
-        BackgroundState.shared.value = BackgroundState(running = isRunning, autoTranslate = true)
+        container.backgroundStatus.publish(BackgroundState(running = isRunning, autoTranslate = true))
     }
 
     private fun stopAutoTranslate() {
         autoJob?.cancel()
         autoJob = null
-        BackgroundState.shared.value = BackgroundState(running = isRunning, autoTranslate = false)
+        container.backgroundStatus.publish(BackgroundState(running = isRunning, autoTranslate = false))
     }
-
-    fun lastResult(): String = lastResultJson
 
     // --- OverlayHost -------------------------------------------------------
 
@@ -346,21 +302,20 @@ class TranslateService : Service(), OverlayHost {
      * stream of them; the notification is the right place for that repetition.
      */
     private fun reportFailureQuietly(result: Result<Translation>) {
+        if (!isRunning) return
         val message = result.exceptionOrNull()?.message ?: return
         if (message.isBlank()) return
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))
+        notifications.show(message)
     }
 
     private fun reportFailure(message: String) {
-        if (message.isBlank()) return
+        if (!isRunning || message.isBlank()) return
         // Toast rather than an overlay window: a failure needs no interaction, so
         // it must not take touches away from the app being read.
         Handler(Looper.getMainLooper()).post {
             Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
         }
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))
+        notifications.show(message)
     }
 
     override fun onStopTranslation() {
@@ -380,8 +335,7 @@ class TranslateService : Service(), OverlayHost {
             )
         }.isSuccess
         if (!opened) {
-            getSystemService(NotificationManager::class.java)
-                .notify(NOTIFICATION_ID, buildNotification(string(R.string.notif_open_hint)))
+            notifications.show(AppLocaleController.localized(this).getString(R.string.notif_open_hint))
         }
     }
 
@@ -389,126 +343,26 @@ class TranslateService : Service(), OverlayHost {
         stopSelf()
     }
 
-    // --- notification ------------------------------------------------------
-
-    private fun createChannel() {
-        // Same id: calling this again updates the name and description, which is
-        // how a channel that already exists on the device gets the new language.
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            string(R.string.notif_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply { description = string(R.string.notif_channel_desc) }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-    }
-
-    /** Strings must be read in the language chosen now, not the one this service started in. */
-    private fun string(id: Int): String = AppLocaleController.localized(this).getString(id)
-
-    /** Body text: the last result when there is one, otherwise the idle message. */
-    private fun notificationDetail(): String {
-        val (count, engine) = lastSuccess ?: return string(R.string.notif_text)
-        val localized = AppLocaleController.localized(this)
-        return localized.resources.getQuantityString(
-            R.plurals.notif_translated_done,
-            count,
-            count,
-            localized.getString(engine.displayNameRes()),
-        )
-    }
-
-    private fun buildNotification(detail: String): Notification {
-        val openApp = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        val translateNow = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, TranslateService::class.java).setAction(ACTION_TRANSLATE),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-        val stop = PendingIntent.getService(
-            this,
-            2,
-            Intent(this, TranslateService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE,
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle(string(R.string.notif_title))
-            .setContentText(detail)
-            .setOngoing(true)
-            .setContentIntent(openApp)
-            .addAction(0, string(R.string.notif_action_translate), translateNow)
-            .addAction(0, string(R.string.notif_action_stop), stop)
-            .build()
-    }
-
-    private fun notifyResult(translation: Translation) {
-        // Remember the data, not the sentence: a later language change rebuilds it.
-        lastSuccess = translation.blocks.size to translation.engine
-        getSystemService(NotificationManager::class.java).notify(
-            NOTIFICATION_ID,
-            buildNotification(notificationDetail()),
-        )
-    }
-
     // --- binder ------------------------------------------------------------
 
-    private val binder = object : ITranslationService.Stub() {
-        override fun translateNow(
-            sourceLang: String?,
-            targetLang: String?,
-            callback: ITranslationCallback?,
-        ) {
-            val target = Language.fromCode(targetLang)
-                .takeIf { it in Language.TARGETS }
-                ?: container.settings.targetLanguage
-            this@TranslateService.translate(target) { result ->
-                result
-                    .onSuccess { runCatching { callback?.onResult(it.toJson()) } }
-                    .onFailure { error ->
-                        val code = (error as? TranslationException)?.code
-                            ?: TranslationErrorCode.TRANSLATION_FAILED
-                        runCatching { callback?.onError(code.value, error.message.orEmpty()) }
-                    }
-            }
-        }
-
-        override fun setAutoTranslate(enabled: Boolean, sourceLang: String?, targetLang: String?) {
-            scope.launch {
-                Language.fromCode(sourceLang).takeIf { it in Language.SOURCES }?.let {
-                    container.settings.sourceLanguage = it
-                }
-                Language.fromCode(targetLang).takeIf { it in Language.TARGETS }?.let {
-                    container.settings.targetLanguage = it
-                }
-                onAutoTranslate(enabled)
-            }
-        }
-
-        override fun getLastResult(): String = lastResultJson
-
-        override fun isAccessibilityReady(): Boolean = AccessibilityBridge.isReady
-
-        override fun hideOverlay() {
-            // Called on a Binder thread; WindowManager.removeView requires Main.
-            scope.launch { AccessibilityBridge.service?.overlayRenderer?.hide() }
-        }
+    private val binder by lazy {
+        TranslationBinder(
+            scope = scope,
+            settings = container.settings,
+            requests = requests,
+            lastResult = { lastResultJson },
+            accessibilityReady = { AccessibilityBridge.isReady },
+            hideOverlay = { AccessibilityBridge.service?.overlayRenderer?.hide() },
+            setAutoTranslate = ::onAutoTranslate,
+        )
     }
 
     companion object {
         const val ACTION_BIND = "vn.onplay.vdubbing.TRANSLATE"
         const val PERMISSION = "vn.onplay.vdubbing.permission.CALL_TRANSLATE"
-        private const val ACTION_TRANSLATE = "vn.onplay.vdubbing.action.TRANSLATE"
-        private const val ACTION_STOP = "vn.onplay.vdubbing.action.STOP"
+        internal const val ACTION_TRANSLATE = "vn.onplay.vdubbing.action.TRANSLATE"
+        internal const val ACTION_STOP = "vn.onplay.vdubbing.action.STOP"
         private const val ACTION_SET_AUTO = "vn.onplay.vdubbing.action.SET_AUTO"
-        private const val CHANNEL_ID = "vdubbing_background"
-        private const val NOTIFICATION_ID = 1001
         private const val WINDOW_DEBOUNCE_MS = 1500L
         private const val SCROLL_DEBOUNCE_MS = 800L
 

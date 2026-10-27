@@ -1,5 +1,6 @@
 package vn.onplay.vdubbing.data.repository
 
+import kotlinx.coroutines.CancellationException
 import vn.onplay.vdubbing.data.capture.BitmapCaptureStore
 import vn.onplay.vdubbing.domain.model.TextBlock
 import vn.onplay.vdubbing.domain.model.TranslationException
@@ -27,6 +28,8 @@ class ScreenCaptureRepositoryImpl(
     override suspend fun capture(): CapturedScreen {
         val bitmap = try {
             source.capture()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (e: Exception) {
             throw TranslationException.CaptureFailed(e)
         }
@@ -39,8 +42,6 @@ class ScreenCaptureRepositoryImpl(
     override fun release(screen: CapturedScreen) = store.release(screen)
 
     override fun foregroundPackage(): String? = source.foregroundPackage()
-
-    override fun hideOverlay() = overlay.hide()
 
     override fun showOverlay(blocks: List<TextBlock>, at: ScreenSize) {
         overlay.show(blocks, at.width, at.height)

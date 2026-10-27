@@ -7,6 +7,11 @@ import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import vn.onplay.vdubbing.domain.model.Language
@@ -25,13 +30,15 @@ class TranslationRepositoryImpl : TranslationRepository {
 
     private val identifier by lazy { LanguageIdentification.getClient() }
     private val translators = HashMap<String, Translator>()
+    private val translationMutex = Mutex()
 
     override suspend fun detect(text: String): Language = withContext(Dispatchers.Default) {
-        val detected = runCatching { identifier.identifyLanguage(text).await() }
-        // Logged, not swallowed: an UNKNOWN here means every line below is handed
-        // back unchanged, and the overlay would silently draw nothing at all.
-        val code = detected.getOrElse {
-            Log.w(TAG, "language detection failed", it)
+        val code = try {
+            identifier.identifyLanguage(text).await()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            Log.w(TAG, "language detection failed", failure)
             "und"
         }
         Language.fromCode(code).also { Log.i(TAG, "detected $code -> $it") }
@@ -41,13 +48,19 @@ class TranslationRepositoryImpl : TranslationRepository {
         lines: List<String>,
         source: Language,
         target: Language,
-    ): List<String> {
-        if (source == target || !source.isTranslatable || !target.isTranslatable) return lines
+    ): List<String> = translationMutex.withLock {
+        if (source == target || !source.isTranslatable || !target.isTranslatable) return@withLock lines
 
         val translator = translatorFor(source, target)
-        return withContext(Dispatchers.Default) {
+        withContext(Dispatchers.Default) {
             try {
-                translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+                // A cancelled caller must not release the mutex while ML Kit is still using the client.
+                withContext(NonCancellable) {
+                    translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+                }
+                ensureActive()
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 throw TranslationException.TranslationFailed(
                     "Không tải được model dịch ${source.code}→${target.code} (cần mạng lần đầu).",
@@ -57,11 +70,16 @@ class TranslationRepositoryImpl : TranslationRepository {
 
             var failed = 0
             val translated = lines.map { line ->
-                runCatching { translator.translate(line).await() }
-                    .getOrElse {
-                        failed++
-                        line
-                    }
+                ensureActive()
+                try {
+                    withContext(NonCancellable) { translator.translate(line).await() }
+                        .also { ensureActive() }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failed++
+                    line
+                }
             }
             // Every failed line falls back to its own text, which the overlay
             // then skips — so a model that never loaded looks exactly like a

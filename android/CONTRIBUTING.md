@@ -1,7 +1,8 @@
 # Contributing to VDubbing
 
-Thanks for taking an interest. This is a single-module Android app: Kotlin +
-Jetpack Compose, one Gradle module `:app`, no DI framework.
+Thanks for taking an interest. The project uses Kotlin + Jetpack Compose, an Android `:app` module,
+and a pure Kotlin/JVM `:domain` module. Hilt injects ViewModels from the shared
+engines owned by `AppContainer`.
 
 ## Getting Started
 
@@ -27,58 +28,48 @@ versions live only in `gradle/libs.versions.toml`.
 | Command | What it proves | Notes |
 |---|---|---|
 | `./gradlew assembleDebug` | the app compiles and packages | APK at `app/build/outputs/apk/debug/` |
-| `./gradlew testDebugUnitTest` | the JVM unit tests pass | `app/src/test` only — 23 tests |
+| `./gradlew :domain:test :app:testDebugUnitTest` | domain and app JVM tests pass | No device required |
+| `./gradlew :app:assembleDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
+| `./gradlew :app:connectedDebugAndroidTest` | instrumentation tests pass | Needs a connected device or emulator |
 | `./gradlew :app:lintDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors by design |
 | `adb install -r app/build/outputs/apk/debug/app-debug.apk` | the APK installs | Reinstalling disconnects the accessibility service; toggle it again in Settings |
 
-**Nothing in this repository tests the overlay, the accessibility service or the
-AIDL path.** Those need a device with the accessibility permission granted by
-hand, and no automated test covers them. A passing build says the code compiles —
-never that the feature works. So never report "tests pass" as the whole story:
-state exactly which commands you ran and what they returned.
+Instrumentation tests cover overlay window order, language dropdowns, rendering,
+ML Kit and Compose screens. `TranslationBinderTest` calls the AIDL adapter from a
+worker thread and checks Main-thread dispatch, languages and response codes.
+These adapter tests do not exercise cross-process Binder transport, real
+accessibility grants, service restarts or OEM window behaviour. Those still need
+manual device checks. A passing build proves compilation, not runtime behaviour.
 
-Inside an agent sandbox `./gradlew` fails before it starts — the Gradle lock
-under `~/.gradle` (`gradle-9.5.0-bin.zip.lck: Operation not permitted`), and later
-a local socket. That is an environment limit, not a code defect. Say which
-command still has to be run by hand rather than reporting a result.
+A first Gradle run needs a JDK and network access for dependency resolution. If a
+command fails due to Gradle locks, SDK setup or other environment limits, report
+the actual error and which checks remain unverified.
 
 ## How the Code Is Organised
 
-```
-app/src/main/
-  aidl/vn/onplay/vdubbing/    ITranslationService, ITranslationCallback
-  java/vn/onplay/vdubbing/
-    domain/                   models, repository contracts, TranslateScreenUseCase
-    data/                     ML Kit OCR + translation, Gemini, settings, capture store
-    framework/
-      accessibility/          capture, screenshot, foreground tracking, bridge
-      overlay/                bubble, panel, menu, translated text
-      service/                TranslateService (foreground + AIDL), JSON shaping
-      locale/                 per-app language controller
-    presentation/             ViewModel, UI state, SettingsScreen (Compose)
-    di/                       AppContainer — the hand-rolled composition root
-  res/                        strings in vi (default), en, ja, ko, zh-rCN
-```
+See [ARCHITECTURE.md](ARCHITECTURE.md) for module and package ownership. The rules
+that keep this shape are:
 
-Rules that keep this shape:
-
-- **The pipeline policy belongs to `TranslateScreenUseCase` and nowhere else.**
-  Local OCR when it read enough of the screen, cloud when it did not, local
-  result preserved when the cloud fails transiently. Only a bad key or exhausted
-  quota aborts. Don't move that decision into a repository or a ViewModel.
-- **Platform and network details stay behind the repository interfaces** in
-  `domain/repository/Repositories.kt`. That is what makes the use case testable
-  without a device; a new dependency on `Context`, a window or an HTTP client in
-  `domain/` breaks the unit tests.
-- **No Hilt, no new frameworks.** `di/AppContainer` is the composition root by
-  design. Before adding a dependency, check whether one already in
-  `gradle/libs.versions.toml` does the job.
-- **Threading is not optional.** Work arrives on the main thread, from the
-  bubble's touch handlers, from the realtime timer, and from Binder callers. UI
-  and `WindowManager` calls need `Dispatchers.Main.immediate`; every
-  `ITranslationService.Stub` method runs on a Binder thread, not the main one.
-- **Release `Bitmap`s as soon as the pixels are no longer needed.** Screenshots
-  are large and held in memory for exactly one request.
+- **The pipeline policy belongs to `:domain`'s `TranslateScreenUseCase`.** Local
+  OCR when sufficient, cloud otherwise, local results preserved on transient
+  cloud failure. Only invalid keys and exhausted quota abort the fallback.
+- **`app` depends on `domain`, never the reverse.** Domain contracts live in
+  individual files under `domain/repository/`. No Android, Compose, HTTP or ML Kit
+  types belong in their signatures.
+- **Each feature owns its content, commands and events.** Shared visual primitives
+  belong in `presentation/designsystem`; this package must not import features.
+- **Reuse the existing Hilt bindings and shared engines.** Do not create a second
+  `AppContainer` or a separate OCR/translation engine for each screen or service.
+- **AIDL dispatches mutations onto Main.** `TranslationBinder` accepts Binder
+  calls; `TranslationRequestRunner` handles admission and progress. Service
+  lifecycle and overlay events remain in `TranslateService`.
+- **All screen translation callers share one use-case instance.** Its mutex rejects
+  overlapping requests, including calls from the app while the service is busy.
+- **Captures belong to their requests.** Release them in `finally`; never clear the
+  shared store when only one consumer stops. Await ML Kit's pixel reads before
+  releasing a cancelled request's bitmap.
+- **Keep physical window ownership in `AccessibilityOverlayRenderer`.** Panel and
+  menu content builders create Views; they do not attach windows or own engines.
 
 ## Language and Comments
 
@@ -101,6 +92,27 @@ Rules that keep this shape:
 
 A new user-facing string goes into all five locale files, and a plural into
 every quantity its language needs — lint fails the build otherwise.
+
+## External App Integration
+
+Other Android apps can request screen translation through AIDL:
+
+1. Copy `ITranslationService.aidl` and `ITranslationCallback.aidl` from
+   `app/src/main/aidl/vn/onplay/vdubbing/`, preserving their package names.
+2. Declare `vn.onplay.vdubbing.permission.CALL_TRANSLATE` in the caller's manifest.
+3. Bind to VDubbing's `TranslateService` with the action
+   `vn.onplay.vdubbing.TRANSLATE` and package `vn.onplay.vdubbing`.
+4. Call `translateNow(source, target, callback)` with language codes such as
+   `"ja"` and `"vi"`; the source also accepts `"auto"`.
+
+The user must enable VDubbing's accessibility service before capture can work.
+Results arrive as JSON through `onResult`; failures arrive through `onError`
+with a stable numeric code. Remote callbacks arrive on Binder threads, so the
+caller must dispatch UI updates to its main thread.
+
+The AIDL files define the methods. `TranslationJson.kt` defines the JSON fields,
+and `domain/model/TranslationErrorCode.kt` defines error numbers. The contract
+details below identify the surfaces callers rely on.
 
 ## Public Contracts
 
@@ -147,7 +159,7 @@ breaking change:
 git checkout -b feature/your-feature-name
 # edit app/src/main/...
 ./gradlew assembleDebug
-./gradlew testDebugUnitTest
+./gradlew :domain:test :app:testDebugUnitTest
 ./gradlew :app:lintDebug
 git commit -m "feat: short description"
 git push origin feature/your-feature-name

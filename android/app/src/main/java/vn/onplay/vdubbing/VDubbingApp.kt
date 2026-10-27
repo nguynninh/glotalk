@@ -1,5 +1,6 @@
 package vn.onplay.vdubbing
 
+import dagger.hilt.android.HiltAndroidApp
 import android.app.Application
 import android.content.Context
 import android.content.res.Configuration
@@ -12,6 +13,7 @@ import vn.onplay.vdubbing.framework.locale.AppLocaleController
  * container, so there is one OCR/translate engine set per process rather than
  * one per component.
  */
+@HiltAndroidApp
 class VDubbingApp : Application() {
 
     val container: AppContainer by lazy { AppContainer(this) }

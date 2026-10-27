@@ -2,7 +2,6 @@ package vn.onplay.vdubbing
 
 import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,76 +9,33 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import vn.onplay.vdubbing.domain.model.AppLanguage
-import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.accessibility.AppForeground
-import vn.onplay.vdubbing.framework.accessibility.SystemAccessibilityStatus
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
-import vn.onplay.vdubbing.framework.service.TranslateService
-import vn.onplay.vdubbing.presentation.AppEnvironment
-import vn.onplay.vdubbing.presentation.PermissionChecker
-import vn.onplay.vdubbing.presentation.ServiceController
-import vn.onplay.vdubbing.presentation.TranslatorViewModel
-import vn.onplay.vdubbing.presentation.ui.SettingsScreen
-import vn.onplay.vdubbing.presentation.ui.theme.VDubbingTheme
+import vn.onplay.vdubbing.presentation.designsystem.theme.VDubbingTheme
+import vn.onplay.vdubbing.presentation.feature.home.HomeUI
+import vn.onplay.vdubbing.presentation.feature.settings.SettingsUI
+import vn.onplay.vdubbing.presentation.feature.settings.SettingsViewModel
 
-/**
- * Composition of the settings screen: it supplies the platform-flavoured
- * collaborators (service start, permission checks) and forwards intents to the
- * ViewModel. No translation logic happens here.
- */
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
     private var notificationsRequested = false
     private var accessibilityPoll: Job? = null
 
-    private val serviceController = object : ServiceController {
-        override fun start() = TranslateService.start(this@MainActivity)
-
-        override fun stop() = TranslateService.stop(this@MainActivity)
-
-        override fun setAutoTranslate(enabled: Boolean, target: Language) {
-            // The ViewModel already persisted the flag; the service reads it.
-            TranslateService.applyAutoTranslate(this@MainActivity)
-        }
-    }
-
-    private val permissionChecker: PermissionChecker = object : PermissionChecker {
-        override fun notificationsGranted(): Boolean =
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(
-                    this@MainActivity,
-                    Manifest.permission.POST_NOTIFICATIONS,
-                ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private val viewModel: TranslatorViewModel by viewModels {
-        TranslatorViewModel.Factory(
-            container = (application as VDubbingApp).container,
-            services = serviceController,
-            permissions = permissionChecker,
-            environment = object : AppEnvironment {
-                override val packageName: String get() = this@MainActivity.packageName
-
-                override fun applyAppLanguage(language: AppLanguage) {
-                    AppLocaleController.apply(this@MainActivity, language)
-                }
-            },
-            accessibility = SystemAccessibilityStatus(this@MainActivity),
-        )
-    }
+    private val viewModel: SettingsViewModel by viewModels()
 
     private val notificationLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -94,32 +50,23 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        lifecycleScope.launch {
+            viewModel.appLanguageChanges.collect { AppLocaleController.apply(this@MainActivity, it) }
+        }
         setContent {
             // state must be read before it can drive the theme.
             val state by viewModel.state.collectAsStateWithLifecycle()
 
             VDubbingTheme(themeMode = state.themeMode) {
                 Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-                    SettingsScreen(
-                        state = state,
-                        modifier = Modifier.padding(padding),
-                        onStartService = viewModel::onStartService,
-                        onStopService = viewModel::onStopService,
-                        onOpenAccessibility = viewModel::onOpenAccessibilitySettings,
-                        onRequestNotifications = ::requestNotifications,
-                        onTranslateNow = viewModel::onTranslateNow,
-                        onHideOverlay = viewModel::onHideOverlay,
-                        onShowBubble = viewModel::onShowBubble,
-                        onSourceLanguageChange = viewModel::onSourceLanguageChange,
-                        onTargetLanguageChange = viewModel::onTargetLanguageChange,
-                        onDisplayModeChange = viewModel::onDisplayModeChange,
-                        onThemeModeChange = viewModel::onThemeModeChange,
-                        onAppLanguageChange = viewModel::onAppLanguageChange,
-                        onAutoTranslateChange = viewModel::onAutoTranslateChange,
-                        onSaveCloud = viewModel::onSaveCloud,
-                        onVerifyKey = viewModel::onVerifyKey,
-                        onDismissMessage = viewModel::consumeMessage,
-                    )
+                    HomeUI(
+                        modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                    ) {
+                        SettingsUI(
+                            viewModel = viewModel,
+                            onRequestNotifications = ::requestNotifications,
+                        )
+                    }
                 }
             }
         }

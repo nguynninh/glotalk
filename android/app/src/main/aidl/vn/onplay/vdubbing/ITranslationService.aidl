@@ -16,7 +16,7 @@ interface ITranslationService {
      */
     void translateNow(String sourceLang, String targetLang, ITranslationCallback callback);
 
-    /** Re-run translation whenever the foreground window changes. Not persisted. */
+    /** Persist auto mode and re-run translation whenever the foreground window changes. */
     void setAutoTranslate(boolean enabled, String sourceLang, String targetLang);
 
     /** JSON of the most recent successful translation, or "" if none yet. */

@@ -147,8 +147,8 @@ Verify threading requirements from the actual implementation.
 
 This repository: an accessibility service owns four overlay windows of type
 `TYPE_ACCESSIBILITY_OVERLAY`, and a foreground service is also the AIDL endpoint.
-Work arrives from the main thread, from the bubble's touch handlers, from a
-3-second auto loop, and from Binder callers. Determine which of those a change
+Work arrives from the main thread, from the bubble's touch handlers, from
+debounced accessibility events, and from Binder callers. Determine which of those a change
 runs on.
 
 ---
@@ -168,7 +168,7 @@ Do not assume a dependency version.
 Read the actual dependency configuration.
 
 This repository has only Gradle/AGP dependencies: no npm, no CocoaPods, no SPM,
-no DI framework (see §20, `AppContainer`).
+Hilt injects presentation ViewModels while services share `AppContainer` engines.
 
 ---
 
@@ -401,20 +401,22 @@ have changed.
 
 ### Shape
 
-- A single-module Android app: Kotlin + Jetpack Compose, one Gradle module `:app`
-  (root project `VDubbing`). No npm, no Swift, no second module.
+- Two Gradle modules (root project `VDubbing`): `:app` is Kotlin + Jetpack Compose
+  on Android; `:domain` is a pure Kotlin/JVM library. `app` depends on `domain`,
+  never the reverse. No npm or Swift.
 - Build configuration lives in `app/build.gradle.kts` + `gradle/libs.versions.toml`
   (AGP 9.3.3, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle wrapper 9.5.0).
   `applicationId` and `namespace` are both `vn.onplay.vdubbing`; `compileSdk` and
   `targetSdk` are 36; `minSdk` is 30 because
   `AccessibilityService.takeScreenshot()` starts there.
-- `app/src/main/java/vn/onplay/vdubbing/` is layered:
-  `domain/` (models, repository interfaces, `TranslateScreenUseCase`),
-  `data/` (ML Kit OCR + translation, Gemini, settings, capture store),
+- `domain/src/main/kotlin/vn/onplay/vdubbing/domain/` contains models,
+  repository interfaces and `TranslateScreenUseCase`.
+  `app/src/main/java/vn/onplay/vdubbing/` contains `data/` (ML Kit OCR + translation, Gemini, settings, capture store),
   `framework/` (accessibility capture and bridge, the four overlay windows,
-  `TranslateService` — the foreground service **and** the AIDL endpoint),
+  `TranslateService` — the foreground service **and** the AIDL endpoint, with
+  separate `TranslationBinder`, `TranslationRequestRunner` and `TranslationNotifications`),
   `presentation/` (ViewModel, UI state, `SettingsScreen`), `di/AppContainer`
-  (the hand-rolled composition root — no Hilt and no plan to add one).
+  (shared engines exposed to Hilt through `PresentationModule`).
 - The whole pipeline policy is in `TranslateScreenUseCase` and nowhere else:
   local OCR when it read enough of the screen, cloud OCR+translation when it did
   not, local result preserved when the cloud fails for a transient reason. Only
@@ -432,19 +434,19 @@ have changed.
 | Command | Proves | Notes |
 |---|---|---|
 | `./gradlew assembleDebug` | the app compiles and packages | APK at `app/build/outputs/apk/debug/`; needs `sdk.dir` in `local.properties` |
-| `./gradlew testDebugUnitTest` | the JVM unit tests pass | 18 tests in `app/src/test` only |
+| `./gradlew :domain:test :app:testDebugUnitTest` | domain and app JVM tests pass | No device required |
+| `./gradlew :app:assembleDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
 | `./gradlew :app:lintDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors, by design |
 
-Nothing here covers the overlay, the accessibility service or the AIDL path: those
-need a device (or emulator) with the accessibility permission granted by hand.
-A passing build says the code compiles — never that the feature works.
+Instrumentation tests cover overlay rendering, window order, dropdowns, Compose
+screens, ML Kit and the AIDL adapter. They require a connected device via
+`./gradlew :app:connectedDebugAndroidTest`. They do not prove the full
+accessibility-service, cross-process AIDL or restart lifecycle. Those need manual
+checks with accessibility enabled. A passing build only proves compilation.
 
-A first Gradle run needs a JDK (Android Studio's bundled one is at
-`/Applications/Android Studio.app/Contents/jbr/Contents/Home`) and network access
-for dependency resolution. Inside the agent sandbox `./gradlew` fails before it
-starts — `gradle-9.5.0-bin.zip.lck: Operation not permitted` under `~/.gradle`.
-When that happens, say so and name the command that still has to be run rather
-than reporting a result.
+A first Gradle run needs a JDK, Android SDK and network access. If execution fails
+because of locks, SDK setup or other environment limits, report the actual error;
+do not assume Gradle cannot run in the current environment.
 
 Reinstalling the app disconnects the accessibility service; the user must toggle
 it in Settings again. Expect that during manual verification instead of reading
@@ -468,11 +470,32 @@ it as a regression.
   APKs installable outside Android Studio.
 - A new user-facing string goes into all five locale files, and its plural into
   every quantity each language needs.
-- Repository interfaces in `domain/repository/Repositories.kt` are what the use
+- Repository interfaces in `:domain` under `domain/repository/` are what the use
   case depends on; platform and network details stay behind them so the pipeline
   stays unit-testable without a device.
 
 ### Conventions
+
+- Organize each screen under `presentation/feature/<feature>/`. Keep `*UI.kt`
+  as the screen entry point receiving its ViewModel via `hiltViewModel()`.
+  Feature content belongs in that feature's `components/`; its state, commands
+  and events stay beside its ViewModel. Do not put feature contracts in the
+  design system.
+- Only shared visual primitives belong in `presentation/designsystem/components/`,
+  grouped by type (`button/`, `card/`, `text/`, `bottomsheet/`). Shared theme and
+  visual helpers live in `designsystem/theme/` and `designsystem/help/`.
+  The design system must not import features, navigation, preview repositories
+  or speech lifecycle helpers. `LayerDependenciesTest` guards these boundaries.
+- Shared sample data belongs in `presentation/preview/`, speech lifecycle helpers
+  in `presentation/speech/`, and localized message models in `presentation/uimodel/`.
+- AIDL mutations and service request admission run on Main. All app and service
+  screen translations share `TranslateScreenUseCase`'s request mutex. A request
+  releases only its own screenshot, after engine reads finish. Service shutdown
+  must not clear the application-wide capture store.
+- Background status comes from an injected `BackgroundStatusRepository` read-only
+  flow, backed by `BackgroundStatusStore`; do not introduce global mutable state.
+- Every screen and visual UI component must have Android Studio previews for
+  light and dark themes, using sample data without live services or storage.
 
 - **Comments: as few as possible.** Write one only when the code cannot say it
   itself — a non-obvious *why*, a measured number behind a constant, a workaround

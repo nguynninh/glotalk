@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
+import android.view.View
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
@@ -27,7 +28,10 @@ import kotlin.math.roundToInt
  * resolves against the language chosen *now* — an overlay window outlives a
  * language change, and Android does not recreate the service for it.
  */
-internal class OverlayUi(private val context: Context) {
+internal class OverlayUi(
+    private val context: Context,
+    private val localize: (Context) -> Context = AppLocaleController::localized,
+) {
 
     val density: Float = context.resources.displayMetrics.density
 
@@ -36,7 +40,7 @@ internal class OverlayUi(private val context: Context) {
     fun sp(value: Float): Float = value * context.resources.displayMetrics.scaledDensity
 
     fun string(@StringRes id: Int, vararg args: Any): String =
-        AppLocaleController.localized(context).getString(id, *args)
+        localize(context).getString(id, *args)
 
     /** Rounded rectangle: cards, chips, plates and the bubble all come from here. */
     fun rounded(
@@ -131,6 +135,45 @@ internal class OverlayUi(private val context: Context) {
                 FrameLayout.LayoutParams(diameter, diameter),
             )
         }
+
+    fun header(title: String, onClose: () -> Unit): View =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(
+                text(title, 20f, Overlay.TEXT, bold = true)
+                    .apply { layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) },
+            )
+            addView(
+                icon(R.drawable.ic_overlay_close, 20f, Overlay.MUTED).apply {
+                    contentDescription = string(R.string.action_close)
+                    val pad = px(8f)
+                    setPadding(pad, pad, pad, pad)
+                    isClickable = true
+                    setOnClickListener { onClose() }
+                },
+            )
+        }
+
+    fun gap(dp: Float): View = View(context).apply {
+        layoutParams = LinearLayout.LayoutParams(1, px(dp))
+    }
+
+    fun divider(inset: Float = 0f): View = View(context).apply {
+        setBackgroundColor(Overlay.DIVIDER)
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            px(1f),
+        ).apply {
+            leftMargin = px(inset)
+            rightMargin = px(inset)
+        }
+    }
+
+    fun column(vararg children: View): LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        children.forEach { addView(it) }
+    }
 
     companion object {
         const val BUBBLE_TEXT = "TA"

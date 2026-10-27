@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-10-27
+
+### Fixed
+
+- Keep the floating dismiss bubble above translated text after every overlay
+  redraw, preserving its position.
+- Show language choices in a vertical, scrollable dropdown inside the translation
+  panel. Tap the same language chip to close it, switch chips to change the list,
+  and close the dropdown after selecting a language.
+
+### Added
+
+- Android regression tests for language dropdown interactions and bubble window
+  order across translation redraws and display mode changes.
+
 ## [1.0.3] - 2026-10-27
 
 ### Fixed
@@ -139,7 +154,8 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/nguynninh/v-dubbing/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/nguynninh/v-dubbing/compare/v1.0.0...v1.0.1

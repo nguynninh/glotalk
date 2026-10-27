@@ -11,6 +11,9 @@ import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
 import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import vn.onplay.vdubbing.data.capture.BackgroundSampler
@@ -46,9 +49,11 @@ class OcrRepositoryImpl(
             ?: throw TranslationException.CaptureFailed(IllegalStateException("capture expired"))
 
         val image = InputImage.fromBitmap(frame.bitmap, 0)
-        val text = withContext(Dispatchers.Default) {
+        // ML Kit keeps reading the bitmap after coroutine cancellation.
+        val text = withContext(Dispatchers.Default + NonCancellable) {
             recognizerFor(script).process(image).await()
         }
+        currentCoroutineContext().ensureActive()
 
         // ML Kit exposes lazy lists that can create new Line objects on each access.
         val recognizedBlocks = text.textBlocks.map { it to it.lines.toList() }
