@@ -140,7 +140,6 @@
     <string name="menu_language">Chọn ngôn ngữ</string>
     <string name="menu_hide_bubble">Ẩn bong bóng</string>
     <string name="menu_exit">Thoát</string>
-    <string name="overlay_banner_title">Bản dịch (%1$s)</string>
     <string name="bubble_open_panel">Mở bảng dịch</string>
     <string name="notif_open_hint">Mở VDubbing từ thông báo đang hiển thị.</string>
     <string name="bubble_translating">Đang dịch màn hình…</string>

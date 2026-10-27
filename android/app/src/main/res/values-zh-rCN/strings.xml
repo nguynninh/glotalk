@@ -134,7 +134,6 @@
     <string name="menu_language">选择语言</string>
     <string name="menu_hide_bubble">隐藏悬浮球</string>
     <string name="menu_exit">退出</string>
-    <string name="overlay_banner_title">译文（%1$s）</string>
     <string name="bubble_open_panel">打开翻译面板</string>
     <string name="notif_open_hint">请从正在显示的通知中打开 VDubbing。</string>
     <string name="bubble_translating">正在翻译屏幕…</string>

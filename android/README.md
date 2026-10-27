@@ -95,7 +95,7 @@ app/src/main/
     data/                     ML Kit OCR + translation, Gemini, settings, capture store
     framework/
       accessibility/          capture, screenshot, foreground tracking, bridge
-      overlay/                bubble, banner, panel, menu, translated text
+      overlay/                bubble, panel, menu, translated text
       service/                TranslateService (foreground + AIDL), JSON shaping
       locale/                 per-app language controller
     presentation/             ViewModel, UI state, SettingsScreen (Compose)
@@ -109,10 +109,10 @@ a cloud failure that is not a key or quota problem still returns the local
 result. Everything below it — pixels, Binder, ML Kit, windows — is behind
 interfaces, so the use case is unit-tested without an emulator.
 
-The overlay is five separate windows rather than one. The translated text window
+The overlay is four separate windows rather than one. The translated text window
 is `FLAG_NOT_TOUCHABLE`, so taps pass through to the app underneath; the bubble,
-banner, panel and menu each get their own small window, because a touchable
-window covering the screen would make the phone unusable.
+panel and menu each get their own small window, because a touchable window
+covering the screen would make the phone unusable.
 
 ## Tests
 

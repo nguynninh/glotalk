@@ -145,7 +145,7 @@ Never assume UI code is running on the main thread.
 
 Verify threading requirements from the actual implementation.
 
-This repository: an accessibility service owns five overlay windows of type
+This repository: an accessibility service owns four overlay windows of type
 `TYPE_ACCESSIBILITY_OVERLAY`, and a foreground service is also the AIDL endpoint.
 Work arrives from the main thread, from the bubble's touch handlers, from a
 3-second auto loop, and from Binder callers. Determine which of those a change
@@ -411,7 +411,7 @@ have changed.
 - `app/src/main/java/vn/onplay/vdubbing/` is layered:
   `domain/` (models, repository interfaces, `TranslateScreenUseCase`),
   `data/` (ML Kit OCR + translation, Gemini, settings, capture store),
-  `framework/` (accessibility capture and bridge, the five overlay windows,
+  `framework/` (accessibility capture and bridge, the four overlay windows,
   `TranslateService` — the foreground service **and** the AIDL endpoint),
   `presentation/` (ViewModel, UI state, `SettingsScreen`), `di/AppContainer`
   (the hand-rolled composition root — no Hilt and no plan to add one).
@@ -457,7 +457,7 @@ it as a regression.
   intent action and the system's accessibility binding all point at them.
 - `permission.CALL_TRANSLATE` stays `protectionLevel="normal"`. Raising it breaks
   every existing caller's `bindService`.
-- The five overlay windows stay separate, and the translated-text window stays
+- The four overlay windows stay separate, and the translated-text window stays
   `FLAG_NOT_TOUCHABLE` — one touchable full-screen window would make the phone
   unusable.
 - The app's own screen is never overlaid (`ownPackage` in
@@ -495,5 +495,5 @@ it as a regression.
 - CHANGELOG follows Keep a Changelog. There is no release script: a release means
   bumping `versionName` **and** `versionCode` in `app/build.gradle.kts` and
   adding the CHANGELOG entry — check the two agree before claiming a release.
-- Commit messages: Conventional Commits, with a Vietnamese subject.
+- Commit messages: Conventional Commits, written **in English** — subject and body.
 - No `Co-Authored-By` or "Generated with Claude" in commits or pull requests.

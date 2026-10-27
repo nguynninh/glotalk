@@ -136,7 +136,11 @@ class OutlinedTextView(context: Context) : View(context) {
         isParagraph: Boolean,
     ): StaticLayout {
         textPaint.textSize = size
-        val lineHeight = (textPaint.descent() - textPaint.ascent()).coerceAtLeast(1f)
+        // The multiplier is part of the line's pitch; measuring the font alone
+        // overestimated maxLines by 15%, and the layout then grew taller than the
+        // box it was drawn in — spilling over the line above and below.
+        val lineHeight = ((textPaint.descent() - textPaint.ascent()) * LINE_SPACING_MULT)
+            .coerceAtLeast(1f)
         val maxLines = (maxHeight / lineHeight).toInt().coerceIn(1, MAX_LINES)
 
         val alignment = if (isParagraph) Layout.Alignment.ALIGN_NORMAL else Layout.Alignment.ALIGN_CENTER

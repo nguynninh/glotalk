@@ -137,7 +137,6 @@
     <string name="menu_language">Choose language</string>
     <string name="menu_hide_bubble">Hide bubble</string>
     <string name="menu_exit">Exit</string>
-    <string name="overlay_banner_title">Translation (%1$s)</string>
     <string name="bubble_open_panel">Open translation panel</string>
     <string name="notif_open_hint">Open VDubbing from its ongoing notification.</string>
     <string name="bubble_translating">Translating the screen…</string>

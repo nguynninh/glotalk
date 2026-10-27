@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-27
+
+### Fixed
+
+- **Overlapping translated text.** A translation longer than the line it replaced
+  grew past its own box and covered the lines above and below it — most visibly
+  a paragraph swallowing the tail of the heading before it. Every block is now
+  confined to its own vertical band, ending halfway into the gap to each
+  neighbour, and only blocks that overlap horizontally count as neighbours, so
+  two columns of text at the same height no longer constrain each other.
+- The line count the translation layout is limited to now includes the
+  line-spacing multiplier. Measuring the font alone under-counted the line pitch
+  by 15%, which let a block lay out taller than the box it was drawn in and spill
+  onto its neighbour even when its height was otherwise correct.
+
+### Removed
+
+- The result banner ("Bản dịch (…)" with its ✕). It duplicated what the bubble
+  already shows: while a translation is on screen the bubble is the red ✕ that
+  clears it. The overlay is now four windows, not five.
+
 ## [1.0.0] - 2026-10-27
 
 First release.
@@ -60,5 +81,6 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/nguynninh/v-dubbing/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nguynninh/v-dubbing/releases/tag/v1.0.0

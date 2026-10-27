@@ -86,7 +86,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         val ev = event ?: return
         val packageName = ev.packageName?.toString() ?: return
-        // Our own overlay windows — bubble, panel, banner — are windows too, and
+        // Our own overlay windows — bubble, panel, menu — are windows too, and
         // they fire this event with our package. Recording them made the app look
         // like the foreground app right after the panel closed, so the next
         // translation decided it was covering our own screen and drew nothing.

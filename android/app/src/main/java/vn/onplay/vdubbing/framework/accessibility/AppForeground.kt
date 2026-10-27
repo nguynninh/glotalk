@@ -4,7 +4,7 @@ package vn.onplay.vdubbing.framework.accessibility
  * Whether this app's own activity is on screen.
  *
  * The accessibility service cannot answer that question from window events:
- * the overlay windows (bubble, panel, banner) belong to this same package and
+ * the overlay windows (bubble, panel, menu) belong to this same package and
  * fire TYPE_WINDOW_STATE_CHANGED exactly like an activity does. Trusting those
  * events made every translation started from the panel look like it was
  * requested against our own settings screen, which suppresses the overlay — the

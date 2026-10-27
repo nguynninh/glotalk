@@ -44,8 +44,8 @@ interface OverlayRenderer {
     fun refresh()
 
     /**
-     * Close the windows that must not appear in a screenshot: the panel, the
-     * menu and the result banner.
+     * Close the windows that must not appear in a screenshot: the panel and the
+     * menu.
      *
      * takeScreenshot() captures the whole display, our own overlays included.
      * The panel is full of interface text in the *app's* language, so leaving it

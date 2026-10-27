@@ -25,18 +25,17 @@ import vn.onplay.vdubbing.framework.locale.AppLocaleController
 /**
  * Everything this app draws on top of another app.
  *
- * Five windows, never one. The translation text is FLAG_NOT_TOUCHABLE so every
- * tap still reaches the app underneath; the bubble, the result banner, the
- * panel and the menu each get a window of their own, because a touchable window
- * covering the whole screen would make the phone unusable.
+ * Four windows, never one. The translation text is FLAG_NOT_TOUCHABLE so every
+ * tap still reaches the app underneath; the bubble, the panel and the menu each
+ * get a window of their own, because a touchable window covering the whole
+ * screen would make the phone unusable.
  *
  * The bubble is the whole interface while another app is in front:
  *  - tap        → the translation panel (languages, mode, start);
  *  - long-press → the quick menu (settings, language, hide, exit);
  *  - drag       → move it, and it stays where it was put.
- * While a translation is showing, a banner names the language it was translated
- * into and offers the ✕ that clears it; the bubble turns into a red ✕ so the
- * most obvious tap is also the way out.
+ * While a translation is showing the bubble turns into a red ✕, so the most
+ * obvious tap is also the way out.
  */
 class AccessibilityOverlayRenderer(
     private val service: AccessibilityService,
@@ -62,7 +61,6 @@ class AccessibilityOverlayRenderer(
     private var textScreenWidth = 0
     private var textScreenHeight = 0
     private var textMode: DisplayMode = DisplayMode.REPLACE
-    private var textTarget: Language = Language.VIETNAMESE
     /** What the open panel was built from, so a redraw keeps the language picker open. */
     private var panelState: PanelState? = null
     /** The language whose choices are showing, or null when the picker is closed. */
@@ -82,8 +80,7 @@ class AccessibilityOverlayRenderer(
     /** True between "Bắt đầu dịch" and the result: the bubble shows it. */
     private var bubbleBusy = false
 
-    // --- banner, panel, menu -----------------------------------------------
-    private var banner: View? = null
+    // --- panel, menu -------------------------------------------------------
     private var panel: View? = null
     private var panelCard: LinearLayout? = null
     private var menu: View? = null
@@ -105,19 +102,10 @@ class AccessibilityOverlayRenderer(
         panelState = null
         textScreenWidth = screenWidth
         textScreenHeight = screenHeight
-        host?.panelState()?.let {
-            textTarget = it.target
-            textMode = it.displayMode
-        }
+        host?.panelState()?.let { textMode = it.displayMode }
         translationShownTime = android.os.SystemClock.uptimeMillis()
         drawTranslation()
-        if (textRoot != null) {
-            showBanner()
-            setBubbleMode(BubbleMode.DISMISS)
-        } else {
-            removeBanner()
-            setBubbleMode(BubbleMode.TRIGGER)
-        }
+        setBubbleMode(if (textRoot != null) BubbleMode.DISMISS else BubbleMode.TRIGGER)
     }
 
     override fun setDisplayMode(mode: DisplayMode) {
@@ -128,7 +116,6 @@ class AccessibilityOverlayRenderer(
 
     override fun hide() {
         removeTextWindow()
-        removeBanner()
         // Cleared, not just un-drawn: `hasTranslation` is what the menu and the
         // panel read to decide between "pause" and "start".
         textBlocks = emptyList()
@@ -139,15 +126,11 @@ class AccessibilityOverlayRenderer(
     override fun dismissTransientWindows() {
         closePanel()
         closeMenu()
-        removeBanner()
     }
 
     override fun refresh() {
         refreshContentDescription()
-        if (textBlocks.isNotEmpty()) {
-            drawTranslation()
-            showBanner()
-        }
+        if (textBlocks.isNotEmpty()) drawTranslation()
         // The panel and the menu are built from strings, so they are rebuilt
         // rather than patched when the interface language changes.
         if (panel != null) openPanel()
@@ -160,8 +143,9 @@ class AccessibilityOverlayRenderer(
         if (textScreenWidth <= 0 || textScreenHeight <= 0) return
 
         val container = FrameLayout(service)
-        val skipped = textBlocks.count { block ->
-            addLine(container, block).not()
+        val bands = VerticalBands.of(textBlocks, ::shouldDraw, textScreenHeight)
+        val skipped = textBlocks.indices.count { index ->
+            addLine(container, textBlocks[index], bands[index]).not()
         }
         if (skipped > 0) {
             Log.w(TAG, "skipped $skipped/${textBlocks.size} lines (no translation or same as original)")
@@ -200,15 +184,21 @@ class AccessibilityOverlayRenderer(
         textRoot = null
     }
 
-    /** @return true when the line was drawn. */
-    private fun addLine(container: FrameLayout, block: TextBlock): Boolean {
+    /**
+     * A translation identical to what is already on screen would be drawn
+     * straight over the original glyphs — blurred double text, not a
+     * translation. Same-language screens and untranslatable scripts produce
+     * exactly that, so those lines are left alone.
+     */
+    private fun shouldDraw(block: TextBlock): Boolean {
         val text = block.text.trim()
-        if (text.isEmpty()) return false
-        // A translation identical to what is already on screen would be drawn
-        // straight over the original glyphs — blurred double text, not a
-        // translation. Same-language screens and untranslatable scripts produce
-        // exactly that, so those lines are left alone.
-        if (text == block.original.trim()) return false
+        return text.isNotEmpty() && text != block.original.trim()
+    }
+
+    /** @return true when the line was drawn. */
+    private fun addLine(container: FrameLayout, block: TextBlock, band: Band): Boolean {
+        if (!shouldDraw(block)) return false
+        val text = block.text.trim()
 
         val replace = textMode == DisplayMode.REPLACE
         val preferredSize = textSizeFor(block)
@@ -222,12 +212,15 @@ class AccessibilityOverlayRenderer(
             .coerceIn(ui.px(MIN_TEXT_WIDTH_DP), textScreenWidth)
         val textWidth = (width - platePadH * 2).coerceAtLeast(ui.px(8f))
 
+        val room = (band.bottom - band.top).coerceAtLeast(1)
         val maxHeight = if (replace) {
             (block.height * REPLACE_HEIGHT_RATIO).toInt()
                 .coerceAtLeast((preferredSize * 1.3f).toInt())
+                .coerceAtMost(room)
         } else {
             (block.height * PARALLEL_HEIGHT_GROWTH).toInt()
                 .coerceAtLeast((preferredSize * 1.6f).toInt())
+                .coerceAtMost(room)
         }
 
         val left = (block.left - platePadH)
@@ -265,18 +258,19 @@ class AccessibilityOverlayRenderer(
             isParagraph = isParagraph,
         )
 
-        val viewHeight = if (replace) {
+        val naturalHeight = if (replace) {
             // Must cover at least the original block plus vertical padding to hide ascenders/descenders
             maxOf(block.height + platePadV * 2, contentHeight + platePadV * 2)
         } else {
             contentHeight + view.verticalSlack
         }
+        val viewHeight = naturalHeight.coerceAtMost(room)
 
         val top = if (replace) {
             block.top + block.height / 2 - viewHeight / 2
         } else {
             block.top + block.height - contentHeight / 4
-        }.coerceIn(0, (textScreenHeight - viewHeight).coerceAtLeast(0))
+        }.coerceIn(band.top, (band.bottom - viewHeight).coerceAtLeast(band.top))
 
         container.addView(
             view,
@@ -303,64 +297,6 @@ class AccessibilityOverlayRenderer(
             ui.sp(MIN_TEXT_SIZE_SP),
             ui.sp(MAX_TEXT_SIZE_SP),
         )
-    }
-
-    // =======================================================================
-    // Banner: what is on screen, and the way out of it
-    // =======================================================================
-
-    private fun showBanner() {
-        removeBanner()
-        val row = LinearLayout(service).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = ui.rounded(Overlay.SURFACE, 24f, 1f, Overlay.DIVIDER)
-            elevation = ui.px(4f).toFloat()
-            setPadding(ui.px(14f), ui.px(8f), ui.px(10f), ui.px(8f))
-        }
-        row.addView(ui.icon(R.drawable.ic_overlay_translate, 16f, Overlay.BLUE))
-        row.addView(
-            ui.text(
-                ui.string(R.string.overlay_banner_title, textTarget.label),
-                13f,
-                Overlay.BLUE,
-                bold = true,
-                maxLines = 1,
-            ).apply { setPadding(ui.px(6f), 0, ui.px(12f), 0) },
-        )
-        row.addView(
-            ui.icon(R.drawable.ic_overlay_close, 18f, Overlay.MUTED).apply {
-                contentDescription = ui.string(R.string.bubble_clear_translation)
-                setPadding(ui.px(4f), ui.px(4f), ui.px(4f), ui.px(4f))
-                isClickable = true
-                setOnClickListener { hide() }
-                // A 18dp glyph is under the touch-target minimum, and this is a
-                // frequent tap, so the background stretches the touchable area.
-                val pad = ui.px(6f)
-                setPadding(pad, pad, pad, pad)
-            },
-        )
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT,
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = ui.px(12f)
-            // Below the status bar and clear of the bubble's start position.
-            y = ui.px(BANNER_TOP_DP)
-        }
-        edgeToEdge(params)
-        runCatching { windowManager.addView(row, params) }.onSuccess { banner = row }
-    }
-
-    private fun removeBanner() {
-        banner?.let { runCatching { windowManager.removeView(it) } }
-        banner = null
     }
 
     // =======================================================================
@@ -1161,8 +1097,6 @@ class AccessibilityOverlayRenderer(
         if (this == Language.AUTO) ui.string(R.string.language_auto) else label
 
     private companion object {
-        const val BANNER_TOP_DP = 96f
-
         /** Slot the picker strip takes: after the header, its gap and the chip row. */
         const val PICKER_INDEX = 3
 
