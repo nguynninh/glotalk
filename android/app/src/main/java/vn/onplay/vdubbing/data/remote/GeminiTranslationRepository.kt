@@ -14,6 +14,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import vn.onplay.vdubbing.BuildConfig
+import vn.onplay.vdubbing.data.capture.BackgroundSampler
 import vn.onplay.vdubbing.data.capture.BitmapCaptureStore
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.TextBlock
@@ -66,7 +67,12 @@ class GeminiTranslationRepository(
             else -> throw TranslationException.TranslationFailed("Gemini trả HTTP $status.")
         }
 
-        val blocks = parseBlocks(body)
+        val blocks = parseBlocks(body).map { raw ->
+            val block = restoreScreenBounds(raw, frame.width, frame.height)
+            block.copy(backgroundColor = BackgroundSampler.sample(
+                block, frame.width, frame.height, frame.bitmap::getPixel,
+            ))
+        }
         Translation(
             blocks = blocks,
             engine = TranslationEngine.CLOUD,
@@ -200,6 +206,7 @@ class GeminiTranslationRepository(
                 right = left + entry.optInt("w")
                 bottom = top + entry.optInt("h")
             }
+            if (box.width() <= 0 || box.height() <= 0) return@mapNotNull null
             TextBlock(
                 original = entry.optString("original"),
                 translated = translated,
@@ -208,7 +215,6 @@ class GeminiTranslationRepository(
                 top = box.top,
                 width = box.width(),
                 height = box.height(),
-                lineCount = (box.height() / ESTIMATED_LINE_HEIGHT).coerceAtLeast(1),
             )
         }
 
@@ -225,8 +231,8 @@ class GeminiTranslationRepository(
             val ratio = MAX_IMAGE_EDGE.toFloat() / longEdge
             Bitmap.createScaledBitmap(
                 bitmap,
-                (bitmap.width * ratio).toInt(),
-                (bitmap.height * ratio).toInt(),
+                (bitmap.width * ratio).toInt().coerceAtLeast(1),
+                (bitmap.height * ratio).toInt().coerceAtLeast(1),
                 true,
             )
         }
@@ -244,13 +250,9 @@ class GeminiTranslationRepository(
         const val HTTP_UNAUTHORIZED = 401
         const val HTTP_FORBIDDEN = 403
         const val HTTP_TOO_MANY = 429
-        const val MAX_IMAGE_EDGE = 1600
         const val JPEG_QUALITY = 80
         val JSON = "application/json; charset=utf-8".toMediaType()
         val REQUIRED_FIELDS = listOf("original", "translated", "x", "y", "w", "h")
-
-        /** Body text in a MAX_IMAGE_EDGE-scaled screenshot is roughly this tall. */
-        const val ESTIMATED_LINE_HEIGHT = 40
 
         fun defaultClient(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -258,4 +260,18 @@ class GeminiTranslationRepository(
             .writeTimeout(30, TimeUnit.SECONDS)
             .build()
     }
+}
+
+private const val MAX_IMAGE_EDGE = 1600
+
+internal fun restoreScreenBounds(block: TextBlock, width: Int, height: Int): TextBlock {
+    val ratio = (MAX_IMAGE_EDGE.toFloat() / maxOf(width, height)).coerceAtMost(1f)
+    val scaleX = width.toFloat() / (width * ratio).toInt().coerceAtLeast(1)
+    val scaleY = height.toFloat() / (height * ratio).toInt().coerceAtLeast(1)
+    return block.copy(
+        left = (block.left * scaleX).toInt(),
+        top = (block.top * scaleY).toInt(),
+        width = (block.width * scaleX).toInt().coerceAtLeast(1),
+        height = (block.height * scaleY).toInt().coerceAtLeast(1),
+    )
 }

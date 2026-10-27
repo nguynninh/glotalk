@@ -56,7 +56,7 @@ class AccessibilityOverlayRenderer(
         private set
 
     // --- translation text --------------------------------------------------
-    private var textRoot: FrameLayout? = null
+    private var textRoot: TranslationOverlayView? = null
     private var textBlocks: List<TextBlock> = emptyList()
     private var textScreenWidth = 0
     private var textScreenHeight = 0
@@ -126,6 +126,7 @@ class AccessibilityOverlayRenderer(
     override fun dismissTransientWindows() {
         closePanel()
         closeMenu()
+        hide()
     }
 
     override fun refresh() {
@@ -142,20 +143,12 @@ class AccessibilityOverlayRenderer(
         if (textBlocks.isEmpty()) return
         if (textScreenWidth <= 0 || textScreenHeight <= 0) return
 
-        val container = FrameLayout(service)
         val rows = VerticalBands.of(textBlocks, ::shouldDraw, textScreenHeight)
-        val columns = HorizontalBands.of(textBlocks, ::shouldDraw, textScreenWidth)
-        val skipped = textBlocks.indices.count { index ->
-            addLine(container, textBlocks[index], rows[index], columns[index]).not()
+        val entries = textBlocks.mapIndexedNotNull { index, block ->
+            prepareText(block, rows[index])
         }
-        if (skipped > 0) {
-            Log.w(TAG, "skipped $skipped/${textBlocks.size} lines (no translation or same as original)")
-        }
-        if (container.childCount == 0) {
-            val sample = textBlocks.take(3).joinToString { it.original.take(24) }
-            Log.w(TAG, "nothing to draw for ${textBlocks.size} blocks, e.g. [$sample]")
-            return
-        }
+        if (entries.isEmpty()) return
+        val container = TranslationOverlayView(service, entries)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -192,111 +185,40 @@ class AccessibilityOverlayRenderer(
      * exactly that, so those lines are left alone.
      */
     private fun shouldDraw(block: TextBlock): Boolean {
-        val text = block.text.trim()
-        return text.isNotEmpty() && text != block.original.trim()
+        return shouldDrawTranslation(block)
     }
 
-    /** @return true when the line was drawn. */
-    private fun addLine(
-        container: FrameLayout,
-        block: TextBlock,
-        row: Band,
-        column: Band,
-    ): Boolean {
-        if (!shouldDraw(block)) return false
-        val text = block.text.trim()
-
+    private fun prepareText(block: TextBlock, row: Band): OverlayText? {
+        if (!shouldDraw(block) || block.width <= 0 || block.height <= 0) return null
         val replace = textMode == DisplayMode.REPLACE
-        val preferredSize = textSizeFor(block)
-        val slack = ui.px(OUTLINE_SLACK_DP)
-
-        // Horizontal and vertical padding for plate to safely cover original glyphs
-        val platePadH = if (replace) ui.px(PLATE_PAD_DP) else 0
-        val platePadV = if (replace) ui.px(PLATE_PAD_V_DP) else 0
-
-        // The column is the hard limit: a nav label whose translation runs long
-        // must wrap or shrink, not spread over the labels beside it. The gutter
-        // on each side keeps a grown block a visible step away from whatever the
-        // band shares its edge with, so the two never read as one run of text.
-        val gutter = ui.px(BAND_GUTTER_DP)
-        val room = (column.end - column.start - gutter * 2).coerceAtLeast(1)
-        val width = (block.width + platePadH * 2)
-            .coerceIn(ui.px(MIN_TEXT_WIDTH_DP), textScreenWidth)
-            .coerceAtMost(room)
-        val textWidth = (width - platePadH * 2).coerceAtLeast(ui.px(8f))
-
-        val heightRoom = (row.end - row.start).coerceAtLeast(1)
-        val maxHeight = if (replace) {
-            (block.height * REPLACE_HEIGHT_RATIO).toInt()
-                .coerceAtLeast((preferredSize * 1.3f).toInt())
-                .coerceAtMost(heightRoom)
-        } else {
-            (block.height * PARALLEL_HEIGHT_GROWTH).toInt()
-                .coerceAtLeast((preferredSize * 1.6f).toInt())
-                .coerceAtMost(heightRoom)
-        }
-
-        val left = (block.left - platePadH)
-            .coerceIn(
-                column.start + gutter,
-                (column.end - width - gutter).coerceAtLeast(column.start + gutter),
-            )
-            .coerceIn(0, (textScreenWidth - width).coerceAtLeast(0))
-
-        val isParagraph = block.lineCount > 1 || block.original.length > 40
-
-        val view = OutlinedTextView(service).apply {
-            outlineColor = OUTLINE_COLOR
-            // Replace has no outline: a stroke on every glyph over a white plate
-            // reads as bold, not as text. Parallel keeps it, because bare white
-            // text needs something to separate it from the app behind it.
-            outlineWidth = if (replace) 0f else ui.px(OUTLINE_WIDTH_DP).toFloat()
-            fillColor = if (replace) PLATE_TEXT_COLOR else Color.WHITE
-            verticalSlack = if (replace) 0 else slack
-            plate = if (replace) {
-                Plate(
-                    color = PLATE_COLOR,
-                    cornerRadius = ui.px(PLATE_RADIUS_DP).toFloat(),
-                    inset = 0,
-                )
-            } else {
-                null
-            }
-            if (replace) {
-                fontWeight = if (!isParagraph && preferredSize > ui.sp(20f)) 700 else 500
-            }
-        }
-        val contentHeight = view.bind(
-            text = text,
-            maxWidth = textWidth,
-            maxHeight = maxHeight,
-            preferredSize = preferredSize,
-            minSize = preferredSize * MIN_SIZE_RATIO,
-            isParagraph = isParagraph,
-        )
-
-        val naturalHeight = if (replace) {
-            // Must cover at least the original block plus vertical padding to hide ascenders/descenders
-            maxOf(block.height + platePadV * 2, contentHeight + platePadV * 2)
-        } else {
-            contentHeight + view.verticalSlack
-        }
-        val viewHeight = naturalHeight.coerceAtMost(heightRoom)
-
+        val pad = if (replace) ui.px(1f) else 0
+        val left = (block.left.toLong() - pad).coerceIn(0, textScreenWidth.toLong()).toInt()
+        val right = (block.left.toLong() + block.width + pad)
+            .coerceIn(0, textScreenWidth.toLong()).toInt()
         val top = if (replace) {
-            block.top + block.height / 2 - viewHeight / 2
+            (block.top.toLong() - pad).coerceIn(0, textScreenHeight.toLong()).toInt()
         } else {
-            block.top + block.height - contentHeight / 4
-        }.coerceIn(row.start, (row.end - viewHeight).coerceAtLeast(row.start))
-
-        container.addView(
-            view,
-            FrameLayout.LayoutParams(width, viewHeight).apply {
-                leftMargin = left
-                topMargin = top
-            },
+            (block.top.toLong() + block.height).coerceIn(0, textScreenHeight.toLong()).toInt()
+        }
+        val bottom = if (replace) {
+            (block.top.toLong() + block.height + pad).coerceIn(0, textScreenHeight.toLong()).toInt()
+        } else {
+            minOf(row.end, top + (block.height * PARALLEL_HEIGHT_GROWTH).toInt(), textScreenHeight)
+        }
+        if (right <= left || bottom <= top) return null
+        val preferred = textSizeFor(block)
+        return OverlayText(
+            left = left,
+            top = top,
+            boxWidth = right - left,
+            boxHeight = bottom - top,
+            text = block.text.trim(),
+            preferredSize = preferred,
+            minSize = minOf(preferred, ui.sp(MIN_TEXT_SIZE_SP), (bottom - top) * 0.6f),
+            isParagraph = block.lineCount > 1,
+            backgroundColor = if (replace) block.backgroundColor else null,
+            outlineWidth = if (replace) 0f else ui.px(OUTLINE_WIDTH_DP).toFloat(),
         )
-        return true
     }
 
     /**
@@ -391,6 +313,10 @@ class AccessibilityOverlayRenderer(
     override fun setBusy(busy: Boolean) {
         bubbleBusy = busy
         applyBubbleAppearance()
+    }
+
+    internal fun setBubbleVisible(visible: Boolean) {
+        bubble?.visibility = if (visible) View.VISIBLE else View.INVISIBLE
     }
 
     override fun hideBubble() {
@@ -1128,26 +1054,6 @@ class AccessibilityOverlayRenderer(
         const val MAX_TEXT_SIZE_SP = 34f
         const val GLYPH_RATIO = 0.66f
         const val REPLACE_GLYPH_RATIO = 0.85f
-        const val MIN_SIZE_RATIO = 0.5f
-        const val MIN_TEXT_WIDTH_DP = 28f
-        /** Room for the outline and a slightly longer word either side. */
-        const val OUTLINE_SLACK_DP = 6f
-        const val PLATE_PAD_DP = 6f
-        /** Clear space kept between a grown block and the edge of its band. */
-        const val BAND_GUTTER_DP = 2f
-        const val PLATE_PAD_V_DP = 2f
-        const val PLATE_RADIUS_DP = 2f
-        const val REPLACE_HEIGHT_RATIO = 1.6f
         const val PARALLEL_HEIGHT_GROWTH = 1.5f
-
-        /**
-         * Pure white on purpose. A near-white plate left a faint grey tint over
-         * the page that read as a stain rather than as paper; the plate only has
-         * to hide the original words, so it may as well match white pages.
-         */
-        val PLATE_COLOR = 0xFFFFFFFF.toInt()
-        val PLATE_TEXT_COLOR = 0xFF202124.toInt()
-        /** Dark rim around every glyph in parallel mode — its separation from the app. */
-        val OUTLINE_COLOR = 0xE6000000.toInt()
     }
 }

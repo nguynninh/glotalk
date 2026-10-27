@@ -15,6 +15,7 @@ import vn.onplay.vdubbing.framework.overlay.AccessibilityOverlayRenderer
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.delay
 
 /**
  * Owns the two capabilities only an accessibility service has: takeScreenshot()
@@ -155,7 +156,18 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
      * ARGB_8888 and close the hardware buffer immediately so the compositor
      * gets its memory back.
      */
-    override suspend fun capture(): Bitmap = suspendCancellableCoroutine { cont ->
+    override suspend fun capture(): Bitmap {
+        overlayRenderer?.setBubbleVisible(false)
+        try {
+            // Wait for the compositor to remove our bubble from the captured display.
+            delay(50)
+            return captureDisplay()
+        } finally {
+            overlayRenderer?.setBubbleVisible(true)
+        }
+    }
+
+    private suspend fun captureDisplay(): Bitmap = suspendCancellableCoroutine { cont ->
         takeScreenshot(
             Display.DEFAULT_DISPLAY,
             mainExecutor,

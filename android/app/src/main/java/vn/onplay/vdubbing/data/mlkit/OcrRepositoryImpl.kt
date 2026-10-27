@@ -1,6 +1,7 @@
 package vn.onplay.vdubbing.data.mlkit
 
 import android.graphics.Rect
+import kotlin.math.abs
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
@@ -12,7 +13,9 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import vn.onplay.vdubbing.data.capture.BackgroundSampler
 import vn.onplay.vdubbing.data.capture.BitmapCaptureStore
+import vn.onplay.vdubbing.data.capture.refineTextInkBounds
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.Script
 import vn.onplay.vdubbing.domain.model.TextBlock
@@ -47,28 +50,67 @@ class OcrRepositoryImpl(
             recognizerFor(script).process(image).await()
         }
 
-        return text.textBlocks.flatMap { block ->
-            val validLines = block.lines.mapNotNull { line ->
-                val content = line.text.trim()
-                val box = line.boundingBox
-                if (content.isEmpty() || box == null) null else line
+        // ML Kit exposes lazy lists that can create new Line objects on each access.
+        val recognizedBlocks = text.textBlocks.map { it to it.lines.toList() }
+        val lines = recognizedBlocks.flatMap { it.second }.associateWith { line ->
+            val elements = line.elements.mapNotNull { element ->
+                val box = element.boundingBox ?: return@mapNotNull null
+                Word(element.text, box, element.confidence)
+            }.toMutableList()
+            if (script == Script.LATIN && elements.size > 1) {
+                if (elements.first().text.length == 1 && elements.first().confidence < 0.35f) elements.removeAt(0)
+                val first = elements.firstOrNull()
+                if (first != null && first.text.firstOrNull() in listOf('+', '|')) {
+                    val symbols = line.elements.first().symbols.dropWhile { it.text == "+" || it.text == "|" }
+                    if (symbols.isNotEmpty()) {
+                        val box = Rect(symbols.first().boundingBox ?: first.box)
+                        symbols.forEach { it.boundingBox?.let(box::union) }
+                        elements[0] = Word(symbols.joinToString("") { it.text }, box, first.confidence)
+                    }
+                }
+            }
+            elements
+        }
+        val starts = lines.values.filter { it.isNotEmpty() }.map { it.first().box }
+        val columns = starts.mapNotNull { candidate ->
+            val aligned = starts.filter { other ->
+                abs(candidate.left - other.left) <= minOf(candidate.height(), other.height()) * 0.35f
+            }
+            if (aligned.count { abs(candidate.top - it.top) > maxOf(candidate.height(), it.height()) } < 2) {
+                null
+            } else candidate.left to (aligned.minOf { it.top }..aligned.maxOf { it.bottom })
+        }.distinct()
+
+        return recognizedBlocks.flatMap { (block, blockLines) ->
+            val validLines = blockLines.flatMap { line ->
+                val words = lines[line].orEmpty()
+                val chunks = mutableListOf<MutableList<Word>>()
+                for (word in words) {
+                    val chunk = chunks.lastOrNull()
+                    val previous = chunk?.lastOrNull()
+                    val columnBreak = previous != null && columns.any { (column, rows) ->
+                        word.box.top in rows && abs(word.box.left - column) <= word.box.height() * 0.35f &&
+                            chunk.first().box.left < column - word.box.height() * 2
+                    }
+                    if (previous == null || columnBreak || word.box.left - previous.box.right > word.box.height() * 1.25f) {
+                        chunks.add(mutableListOf(word))
+                    } else chunk.add(word)
+                }
+                chunks.map { Line(it, Language.fromCode(line.recognizedLanguage)) }
             }
             if (validLines.isEmpty()) return@flatMap emptyList()
 
-            // Group lines into coherent paragraph chunks. If two consecutive lines
-            // have an unusually large vertical gap (> line.height), treat as separate items.
-            val groups = mutableListOf<MutableList<com.google.mlkit.vision.text.Text.Line>>()
-            var currentGroup = mutableListOf<com.google.mlkit.vision.text.Text.Line>()
+            // Join wrapped lines only; adjacent columns and separate rows retain their boxes.
+            val groups = mutableListOf<MutableList<Line>>()
+            var currentGroup = mutableListOf<Line>()
 
             for (line in validLines) {
                 if (currentGroup.isEmpty()) {
                     currentGroup.add(line)
                 } else {
-                    val prevBox = currentGroup.last().boundingBox!!
-                    val curBox = line.boundingBox!!
-                    val gap = curBox.top - prevBox.bottom
-                    val prevHeight = prevBox.height().coerceAtLeast(1)
-                    if (gap <= prevHeight * 1.8f) {
+                    val prevBox = currentGroup.last().box
+                    val curBox = line.box
+                    if (canJoinParagraph(prevBox, curBox)) {
                         currentGroup.add(line)
                     } else {
                         groups.add(currentGroup)
@@ -82,28 +124,37 @@ class OcrRepositoryImpl(
                 val content = joinLines(group.map { it.text })
                 if (content.isBlank()) return@mapNotNull null
 
-                val left = group.minOf { it.boundingBox!!.left }
-                val top = group.minOf { it.boundingBox!!.top }
-                val right = group.maxOf { it.boundingBox!!.right }
-                val bottom = group.maxOf { it.boundingBox!!.bottom }
-
-                val langCode = block.recognizedLanguage.ifEmpty {
-                    group.first().recognizedLanguage
-                }
+                val left = group.minOf { it.box.left }
+                val top = group.minOf { it.box.top }
+                val right = group.maxOf { it.box.right }
+                val bottom = group.maxOf { it.box.bottom }
 
                 TextBlock(
                     original = content,
                     translated = content,
-                    language = Language.fromCode(langCode),
+                    language = Language.fromCode(block.recognizedLanguage).takeIf { it.isTranslatable }
+                        ?: group.first().language,
                     left = left,
                     top = top,
                     width = (right - left).coerceAtLeast(1),
                     height = (bottom - top).coerceAtLeast(1),
-                    confidence = meanOf(group.flatMap { it.elements }.map { it.confidence }),
+                    confidence = meanOf(group.flatMap { it.words }.map { it.confidence }),
                     lineCount = group.size,
                 )
             }
+        }.map { block ->
+            val styled = block.copy(backgroundColor = BackgroundSampler.sample(
+                block, frame.width, frame.height, frame.bitmap::getPixel,
+            ))
+            refineTextInkBounds(styled, frame.width, frame.height, frame.bitmap::getPixel)
         }
+    }
+
+    private data class Word(val text: String, val box: Rect, val confidence: Float)
+
+    private class Line(val words: List<Word>, val language: Language) {
+        val text = words.joinToString(" ") { it.text }
+        val box = Rect(words.first().box).apply { words.forEach { union(it.box) } }
     }
 
     private fun joinLines(lines: List<String>): String {

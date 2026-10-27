@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-27
+
+### Fixed
+
+- Fit translated text inside its OCR bounds and draw it on a single overlay
+  canvas. Use the block dimensions when positioning text inside a canvas clip,
+  preventing translated glyphs from being clipped off screen.
+- Sample replacement backgrounds from the screenshot and choose contrasting
+  text, preserving coloured buttons instead of covering them with white plates.
+- Refine masks to cover clipped glyph edges, split table columns, and exclude
+  uncertain leading icon fragments from Latin OCR text. Leave addresses, numeric
+  controls and uncertain short icon fragments untouched by the overlay.
+- Materialise ML Kit's lazy line lists before matching OCR results, preventing
+  visible text from being discarded as an empty recognition result.
+- Restore Gemini bounding boxes to the original screenshot dimensions and hide
+  the floating bubble while capturing, so it is not recognised as page text.
+- Apply AIDL auto-translation settings on the main thread and persist the
+  requested source, target and enabled state.
+
+### Changed
+
+- Replace the repeating three-second auto-translation timer with debounced
+  window and scroll triggers, avoiding repeated translations of an unchanged
+  screen. Coalesce pending triggers and wait for an active translation to finish.
+
+### Added
+
+- Regression tests for background sampling, glyph coverage, translation
+  visibility, cloud coordinates and OCR column grouping, including a real page
+  fixture and hardware-accelerated text rendering checks on Android.
+
 ## [1.0.2] - 2026-10-27
 
 ### Fixed
@@ -108,7 +139,8 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/nguynninh/v-dubbing/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/nguynninh/v-dubbing/releases/tag/v1.0.0

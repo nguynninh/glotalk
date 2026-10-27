@@ -1,5 +1,7 @@
 package vn.onplay.vdubbing.framework.service
 
+import android.util.Log
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -105,7 +107,7 @@ class TranslateService : Service(), OverlayHost {
         showBubble()
         setupAccessibilityCallbacks()
         if (container.settings.autoTranslate) {
-            startAutoTranslate(container.settings.targetLanguage)
+            startAutoTranslate()
         }
     }
 
@@ -120,7 +122,7 @@ class TranslateService : Service(), OverlayHost {
                 // The activity flips auto mode through here: startService carries
                 // the command, the persisted flag carries the intent for restarts.
                 if (container.settings.autoTranslate) {
-                    startAutoTranslate(container.settings.targetLanguage)
+                    startAutoTranslate()
                 } else {
                     stopAutoTranslate()
                 }
@@ -212,7 +214,9 @@ class TranslateService : Service(), OverlayHost {
                 // panel instead of the page.
                 AccessibilityBridge.service?.overlayRenderer?.dismissTransientWindows()
                 delay(CAPTURE_SETTLE_MS)
+                Log.i("VDubbingService", "translation started")
                 val translation = container.translateScreen(source, target, ownPackage = packageName)
+                Log.i("VDubbingService", "translation finished: ${translation.blocks.size} blocks")
                 lastResultJson = translation.toJson()
                 notifyResult(translation)
                 callback(Result.success(translation))
@@ -227,7 +231,6 @@ class TranslateService : Service(), OverlayHost {
         }
     }
 
-    private var scrollDebounceJob: Job? = null
     private var translatedPackage: String? = null
 
     private fun setupAccessibilityCallbacks() {
@@ -243,13 +246,7 @@ class TranslateService : Service(), OverlayHost {
                 }
             }
             if (container.settings.autoTranslate) {
-                scrollDebounceJob?.cancel()
-                scrollDebounceJob = scope.launch {
-                    delay(SCROLL_DEBOUNCE_MS)
-                    if (container.settings.autoTranslate && !busy) {
-                        translate(container.settings.targetLanguage) { reportFailureQuietly(it) }
-                    }
-                }
+                scheduleAutoTranslate(SCROLL_DEBOUNCE_MS)
             }
         }
         service.onWindowChanged = {
@@ -263,34 +260,31 @@ class TranslateService : Service(), OverlayHost {
                 }
             }
             if (container.settings.autoTranslate) {
-                scope.launch {
-                    delay(WINDOW_DEBOUNCE_MS)
-                    if (container.settings.autoTranslate && !busy) {
-                        translate(container.settings.targetLanguage) { reportFailureQuietly(it) }
-                    }
-                }
+                scheduleAutoTranslate(WINDOW_DEBOUNCE_MS)
             }
         }
     }
 
-    private fun startAutoTranslate(target: Language) {
+    private fun scheduleAutoTranslate(debounceMs: Long) {
         autoJob?.cancel()
-        setupAccessibilityCallbacks()
-
         autoJob = scope.launch {
-            while (true) {
-                if (!busy) translate(target) { result -> reportFailureQuietly(result) }
-                delay(AUTO_INTERVAL_MS)
+            delay(debounceMs)
+            while (busy) delay(100)
+            if (container.settings.autoTranslate) {
+                translate(container.settings.targetLanguage) { reportFailureQuietly(it) }
             }
         }
+    }
+
+    private fun startAutoTranslate() {
+        setupAccessibilityCallbacks()
+        scheduleAutoTranslate(0)
         BackgroundState.shared.value = BackgroundState(running = isRunning, autoTranslate = true)
     }
 
     private fun stopAutoTranslate() {
         autoJob?.cancel()
         autoJob = null
-        scrollDebounceJob?.cancel()
-        scrollDebounceJob = null
         BackgroundState.shared.value = BackgroundState(running = isRunning, autoTranslate = false)
     }
 
@@ -328,7 +322,7 @@ class TranslateService : Service(), OverlayHost {
 
     override fun onAutoTranslate(enabled: Boolean) {
         container.settings.autoTranslate = enabled
-        if (enabled) startAutoTranslate(container.settings.targetLanguage)
+        if (enabled) startAutoTranslate()
         else stopAutoTranslate()
     }
 
@@ -486,10 +480,15 @@ class TranslateService : Service(), OverlayHost {
         }
 
         override fun setAutoTranslate(enabled: Boolean, sourceLang: String?, targetLang: String?) {
-            val target = Language.fromCode(targetLang)
-                .takeIf { it in Language.TARGETS }
-                ?: container.settings.targetLanguage
-            if (enabled) startAutoTranslate(target) else stopAutoTranslate()
+            scope.launch {
+                Language.fromCode(sourceLang).takeIf { it in Language.SOURCES }?.let {
+                    container.settings.sourceLanguage = it
+                }
+                Language.fromCode(targetLang).takeIf { it in Language.TARGETS }?.let {
+                    container.settings.targetLanguage = it
+                }
+                onAutoTranslate(enabled)
+            }
         }
 
         override fun getLastResult(): String = lastResultJson
@@ -510,7 +509,6 @@ class TranslateService : Service(), OverlayHost {
         private const val ACTION_SET_AUTO = "vn.onplay.vdubbing.action.SET_AUTO"
         private const val CHANNEL_ID = "vdubbing_background"
         private const val NOTIFICATION_ID = 1001
-        private const val AUTO_INTERVAL_MS = 3000L
         private const val WINDOW_DEBOUNCE_MS = 1500L
         private const val SCROLL_DEBOUNCE_MS = 800L
 

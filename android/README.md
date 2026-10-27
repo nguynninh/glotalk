@@ -18,8 +18,8 @@ back over the original words. Other apps can ask it to translate over AIDL.
 - **Optional Gemini fallback.** When OCR reads too little of the screen, and the
   user has enabled it with their own API key, one Gemini request does OCR and
   translation together and returns bounding boxes.
-- **Realtime mode.** Re-translates when the window changes (debounced) and on a
-  timer while it is on.
+- **Realtime mode.** Re-translates on window changes and scrolling, with
+  debounced triggers instead of repeatedly translating an unchanged screen.
 - **Floating bubble.** Tap for the translation panel (languages, mode, start),
   long-press for the quick menu (pause, language, settings, hide, exit), drag to
   move. While a translation is showing the bubble turns into a red ✕.
@@ -85,9 +85,12 @@ through — permission, binding, JSON schema, error table and limits such as
 ./gradlew testDebugUnitTest
 ```
 
-23 JVM unit tests cover `TranslateScreenUseCase`, `VerticalBands` and `AppLanguage`
-tag mapping. The overlay, the service and the AIDL path need a device and are
-covered by no automated test.
+JVM unit tests cover the translation pipeline, overlay bounds, background
+sampling, visibility rules and language tag mapping. Android instrumentation
+tests cover OCR on a page fixture, the OCR-to-overlay path and text rendering
+in a hardware-accelerated window. Run them with
+`./gradlew :app:connectedDebugAndroidTest` on a device or emulator. These tests
+do not verify the full accessibility-service or AIDL lifecycle.
 
 Module layout, the pipeline's rules, invariants, the release procedure and what
 each Gradle command actually proves are in
@@ -97,8 +100,9 @@ each Gradle command actually proves are in
 
 - **`FLAG_SECURE` apps cannot be read.** Netflix, most banking apps and some
   video players return a black screenshot. There is no legitimate way around it.
-- **Screenshot rate.** Android throttles `takeScreenshot()`. Realtime mode spaces
-  its captures (3 s timer, 1.5 s debounce on window changes) for that reason.
+- **Screenshot rate.** Android throttles `takeScreenshot()`. Realtime mode
+  debounces window changes by 1.5 s and scrolling by 0.8 s, and waits for an
+  active translation to finish before starting another.
 - **The accessibility service is the user's to enable**; no code can grant it.
 - **On-device translation quality varies** with the language pair and with how
   much text the OCR managed to read.

@@ -17,6 +17,8 @@ data class TextBlock(
     /** Mean OCR confidence in 0..1, or null when the recognizer reported none. */
     val confidence: Double? = null,
     val lineCount: Int = 1,
+    /** Opaque background sampled from the captured screen, before its pixels are released. */
+    val backgroundColor: Int = 0xFFFFFFFF.toInt(),
 ) {
     val text: String get() = translated.ifBlank { original }
 }
