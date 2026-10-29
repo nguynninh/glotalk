@@ -19,7 +19,6 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
-import vn.onplay.vdubbing.MainActivity
 import vn.onplay.vdubbing.domain.model.Language
 
 @RunWith(AndroidJUnit4::class)
@@ -34,7 +33,7 @@ class LanguageDropdownTest {
             .map { card().getChildAt(it) }.filterIsInstance<ScrollView>().singleOrNull()
         fun options() = dropdown()!!.getChildAt(0) as LinearLayout
 
-        ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        ActivityScenario.launch(OverlayTestActivity::class.java).use { scenario ->
             scenario.onActivity { activity ->
                 val service = object : AccessibilityService() {
                     init { attachBaseContext(activity) }

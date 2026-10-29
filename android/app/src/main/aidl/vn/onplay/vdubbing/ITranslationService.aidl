@@ -4,7 +4,7 @@ import vn.onplay.vdubbing.ITranslationCallback;
 
 /**
  * Bound by other apps after requesting
- * vn.onplay.vdubbing.permission.CALL_TRANSLATE.
+ * <applicationId>.permission.CALL_TRANSLATE for the installed Glotalk variant.
  */
 interface ITranslationService {
     /**

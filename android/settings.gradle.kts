@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VDubbing"
+rootProject.name = "Glotalk"
 include(":app")
 include(":domain")

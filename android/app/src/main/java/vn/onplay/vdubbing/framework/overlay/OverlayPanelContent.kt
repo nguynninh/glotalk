@@ -6,6 +6,8 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.content.res.ColorStateList
 import android.widget.ScrollView
 import android.widget.Switch
 import vn.onplay.vdubbing.R
@@ -24,7 +26,10 @@ internal class OverlayPanelContent(
     private enum class Picker { SOURCE, TARGET }
     private var picker: Picker? = null
 
-    fun reset() { picker = null }
+    var isAdjustingVolume = false
+        private set
+
+    fun reset() { picker = null; isAdjustingVolume = false }
 
     fun build(state: PanelState): LinearLayout {
         val card = LinearLayout(context).apply {
@@ -120,6 +125,33 @@ internal class OverlayPanelContent(
         card.addView(ui.divider())
         card.addView(ui.gap(14f))
 
+        card.addView(
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = ui.px(64f)
+                addView(ui.column(
+                    ui.text(ui.string(R.string.audio_title), 16f, Overlay.TEXT),
+                    ui.text(ui.string(state.audioStatusRes.takeIf { it != 0 }
+                        ?: R.string.audio_description), 12f, Overlay.MUTED, maxLines = 2),
+                ), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+                addView(Switch(context).apply {
+                    contentDescription = ui.string(R.string.audio_title)
+                    isChecked = state.audioActive
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) closePanel()
+                        host?.onAudioTranslation(checked)
+                        post { refreshPanel() }
+                    }
+                })
+            },
+        )
+        card.addView(ui.gap(8f))
+
+        card.addView(volumeSlider(R.string.audio_original_volume, state.originalVolume) { host?.onOriginalVolume(it) })
+        card.addView(volumeSlider(R.string.audio_translation_volume, state.translationVolume) { host?.onTranslationVolume(it) })
+        card.addView(ui.gap(8f))
+
         // Display mode.
         card.addView(ui.text(ui.string(R.string.panel_mode_title), 15f, Overlay.TEXT, bold = true))
         card.addView(ui.gap(10f))
@@ -197,6 +229,35 @@ internal class OverlayPanelContent(
         )
         return card
     }
+
+    private fun volumeSlider(labelRes: Int, volume: Int, onChange: (Int) -> Unit): View =
+        LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            val label = ui.string(labelRes)
+            val value = ui.text("$label  $volume%", 13f, Overlay.TEXT)
+            addView(value)
+            addView(SeekBar(context).apply {
+                contentDescription = label
+                max = 100
+                progress = volume
+                progressTintList = ColorStateList.valueOf(Overlay.BLUE)
+                thumbTintList = ColorStateList.valueOf(Overlay.BLUE)
+                minimumHeight = ui.px(48f)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            value.text = "$label  $progress%"
+                            onChange(progress)
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar) { isAdjustingVolume = true }
+                    override fun onStopTrackingTouch(bar: SeekBar) {
+                        isAdjustingVolume = false
+                        refreshPanel()
+                    }
+                })
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, ui.px(48f)))
+        }
 
     private fun toggleLanguagePicker(requested: Picker) {
         picker = if (picker == requested) null else requested

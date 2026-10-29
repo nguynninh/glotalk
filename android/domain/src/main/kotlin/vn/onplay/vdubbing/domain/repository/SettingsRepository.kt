@@ -6,6 +6,8 @@ import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 
 interface SettingsRepository {
+    var geminiLiveKey: String
+    var geminiLiveAudioEnabled: Boolean
     var geminiKey: String
     var cloudFallbackEnabled: Boolean
     var targetLanguage: Language

@@ -5,11 +5,14 @@ import androidx.lifecycle.ViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
+import vn.onplay.vdubbing.domain.time.Countdown
 import kotlinx.coroutines.flow.receiveAsFlow
 
 @HiltViewModel
-class FlashcardViewModel @Inject constructor(private val savedState: SavedStateHandle) : ViewModel() {
+class FlashcardViewModel @Inject constructor(
+    private val savedState: SavedStateHandle,
+    private val countdown: Countdown,
+) : ViewModel() {
     val index = savedState.getStateFlow("index", 0)
     val revealed = savedState.getStateFlow("revealed", false)
     val playing = savedState.getStateFlow("playing", false)
@@ -46,7 +49,8 @@ class FlashcardViewModel @Inject constructor(private val savedState: SavedStateH
 
     suspend fun advancePlayback(count: Int) {
         if (!playing.value) return
-        delay(3000)
+        countdown.await(3000)
+        if (!playing.value) return
         if (!revealed.value) flip() else next(count)
     }
 }

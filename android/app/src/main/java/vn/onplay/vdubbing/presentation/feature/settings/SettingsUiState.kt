@@ -30,6 +30,8 @@ data class SettingsUiState(
     val notificationsGranted: Boolean = false,
     val cloudEnabled: Boolean = false,
     val savedKey: String = "",
+    val geminiLiveKey: String = "",
+    val geminiLiveAudioEnabled: Boolean = false,
     /** What the screen is assumed to be in; AUTO asks the translator to detect it. */
     val sourceLanguage: Language = Language.AUTO,
     val targetLanguage: Language = Language.VIETNAMESE,

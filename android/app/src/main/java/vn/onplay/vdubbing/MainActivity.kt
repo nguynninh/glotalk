@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.os.Build
 import android.os.Bundle
+import android.os.CountDownTimer
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,8 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.accessibility.AppForeground
@@ -33,7 +32,7 @@ import vn.onplay.vdubbing.presentation.feature.settings.SettingsViewModel
 class MainActivity : ComponentActivity() {
 
     private var notificationsRequested = false
-    private var accessibilityPoll: Job? = null
+    private var accessibilityPoll: CountDownTimer? = null
 
     private val viewModel: SettingsViewModel by viewModels()
 
@@ -77,6 +76,8 @@ class MainActivity : ComponentActivity() {
         // Not onStop: a paused activity is already behind whatever is in front,
         // and onStop can lag behind the next app's first frame.
         AppForeground.onActivityPaused()
+        accessibilityPoll?.cancel()
+        accessibilityPoll = null
     }
 
     override fun onResume() {
@@ -96,15 +97,22 @@ class MainActivity : ComponentActivity() {
     private fun pollUntilAccessibilityLive() {
         if (accessibilityPoll != null) return
         viewModel.onAccessibilityPollReset()
-        accessibilityPoll = lifecycleScope.launch {
-            repeat(ACCESSIBILITY_POLL_ATTEMPTS) {
-                delay(ACCESSIBILITY_POLL_INTERVAL_MS)
+        accessibilityPoll = object : CountDownTimer(
+            ACCESSIBILITY_POLL_ATTEMPTS * ACCESSIBILITY_POLL_INTERVAL_MS,
+            ACCESSIBILITY_POLL_INTERVAL_MS,
+        ) {
+            override fun onTick(millisUntilFinished: Long) {
                 viewModel.onAccessibilityPollTick()
-                if (AccessibilityBridge.isReady) return@launch
+                if (AccessibilityBridge.isReady) {
+                    cancel()
+                    accessibilityPoll = null
+                }
             }
-        }.also { job ->
-            job.invokeOnCompletion { accessibilityPoll = null }
-        }
+            override fun onFinish() {
+                viewModel.onAccessibilityPollTick()
+                accessibilityPoll = null
+            }
+        }.also { it.start() }
     }
 
     private fun requestNotifications() {

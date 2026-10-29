@@ -72,6 +72,10 @@ interface OverlayHost {
 
     fun onAutoTranslate(enabled: Boolean)
 
+    fun onAudioTranslation(enabled: Boolean)
+    fun onOriginalVolume(volume: Int)
+    fun onTranslationVolume(volume: Int)
+
     /** "Bắt đầu dịch" — translate the screen now. */
     fun onStartTranslation()
 
@@ -97,4 +101,8 @@ data class PanelState(
     val autoTranslate: Boolean = false,
     val translating: Boolean = false,
     val hasTranslation: Boolean = false,
+    val audioActive: Boolean = false,
+    val audioStatusRes: Int = 0,
+    val originalVolume: Int = 100,
+    val translationVolume: Int = 100,
 )

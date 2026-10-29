@@ -8,4 +8,10 @@
     <style name="Theme.VDubbing" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/window_background</item>
     </style>
+    <style name="Theme.VDubbing.Permission" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:colorAccent">@android:color/holo_blue_light</item>
+    </style>
 </resources>

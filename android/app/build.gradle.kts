@@ -7,6 +7,7 @@ plugins {
 
 android {
     namespace = "vn.onplay.vdubbing"
+    ndkVersion = libs.versions.ndk.get()
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -14,14 +15,20 @@ android {
     }
 
     defaultConfig {
-        applicationId = "vn.onplay.vdubbing"
+        applicationId = "vn.onplay.glotalk"
         // AccessibilityService.takeScreenshot() requires API 30.
         minSdk = 30
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
 
-        testInstrumentationRunner = "vn.onplay.vdubbing.HiltTestRunner"
+        testInstrumentationRunner = providers.gradleProperty("vdubbing.testRunner")
+            .getOrElse("vn.onplay.vdubbing.HiltTestRunner")
+        externalNativeBuild {
+            cmake {
+                arguments += "-DVDUBBING_WHISPER_VERSION=${libs.versions.whisperCpp.get()}"
+            }
+        }
 
         buildConfigField(
             "String",
@@ -31,11 +38,28 @@ android {
         buildConfigField("String", "GEMINI_MODEL", "\"gemini-3.8-flash\"")
     }
 
+    flavorDimensions += "environment"
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+        }
+        create("production") {
+            dimension = "environment"
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = false
             }
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = libs.versions.cmake.get()
         }
     }
     compileOptions {

@@ -56,6 +56,8 @@ class SettingsViewModel @Inject constructor(
         _state.update {
             it.copy(
                 savedKey = settings.geminiKey,
+                geminiLiveKey = settings.geminiLiveKey,
+                geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
                 cloudEnabled = settings.cloudFallbackEnabled,
                 sourceLanguage = settings.sourceLanguage,
                 targetLanguage = settings.targetLanguage,
@@ -90,6 +92,8 @@ class SettingsViewModel @Inject constructor(
                 themeMode = settings.themeMode,
                 cloudEnabled = settings.cloudFallbackEnabled,
                 savedKey = settings.geminiKey,
+                geminiLiveKey = settings.geminiLiveKey,
+                geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
                 accessibilitySnapshot = snapshot,
             )
         }
@@ -203,6 +207,27 @@ class SettingsViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    fun onSaveGeminiLive(key: String, enabled: Boolean) {
+        val trimmed = key.trim()
+        if ((enabled && trimmed.isEmpty()) || trimmed.length > 512 || trimmed.any { it.code !in 33..126 }) {
+            _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.gemini_live_key_required), isError = true)) }
+            return
+        }
+        try {
+            val changed = settings.geminiLiveKey != trimmed || settings.geminiLiveAudioEnabled != enabled
+            settings.geminiLiveKey = trimmed
+            settings.geminiLiveAudioEnabled = enabled
+            if (changed) services.stopAudioTranslation()
+            _state.update { it.copy(
+                geminiLiveKey = trimmed,
+                geminiLiveAudioEnabled = enabled,
+                message = UiMessage(UiContent.Text(R.string.gemini_live_saved)),
+            ) }
+        } catch (_: Exception) {
+            _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.gemini_live_save_failed), isError = true)) }
         }
     }
 

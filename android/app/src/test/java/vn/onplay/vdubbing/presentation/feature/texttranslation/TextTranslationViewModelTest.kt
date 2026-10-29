@@ -9,10 +9,64 @@ import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.TranslationHistoryEntry
 import vn.onplay.vdubbing.domain.repository.TranslationRepository
 import vn.onplay.vdubbing.domain.repository.TranslationHistoryRepository
+import vn.onplay.vdubbing.domain.time.Countdown
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TextTranslationViewModelTest {
     private val history = History()
+    private var countdown = Countdown { }
+
+    @Test fun typingAndLanguageChangesReplaceOneEntryUntilInputIsCleared() = runTest {
+        val model = viewModel { text, _, _ -> "translated $text" }
+        model.translate("xin", false, Language.VIETNAMESE, Language.ENGLISH) {}
+        model.translate("xin chào", false, Language.VIETNAMESE, Language.ENGLISH) {}
+        model.translate("xin chào bạn", false, Language.VIETNAMESE, Language.CHINESE) {}
+        assertEquals(listOf("xin chào bạn"), history.saved)
+        model.translate("", false, Language.VIETNAMESE, Language.CHINESE) {}
+        model.translate("cảm ơn", false, Language.VIETNAMESE, Language.CHINESE) {}
+        assertEquals(listOf("xin chào bạn", "cảm ơn"), history.saved)
+    }
+
+    @Test fun cancellingDuringSaveStillTracksTheRowForTheNextTranslation() = runTest {
+        val saveStarted = CompletableDeferred<Unit>()
+        val finishSave = CompletableDeferred<Unit>()
+        history.beforeSave = {
+            if (it == "old") {
+                saveStarted.complete(Unit)
+                finishSave.await()
+            }
+        }
+        val model = viewModel { text, _, _ -> "translated $text" }
+        val old = launch { model.translate("old", false, Language.ENGLISH, Language.VIETNAMESE) {} }
+        saveStarted.await()
+        old.cancel()
+        val next = launch { model.translate("new", false, Language.ENGLISH, Language.VIETNAMESE) {} }
+        advanceTimeBy(451)
+        finishSave.complete(Unit)
+        old.join()
+        next.join()
+        assertEquals(listOf("new"), history.saved)
+    }
+
+    @Test fun clearingWhileSaveIsInProgressStartsAnIndependentEntry() = runTest {
+        val saveStarted = CompletableDeferred<Unit>()
+        val finishSave = CompletableDeferred<Unit>()
+        history.beforeSave = {
+            if (it == "old") {
+                saveStarted.complete(Unit)
+                finishSave.await()
+            }
+        }
+        val model = viewModel { text, _, _ -> text }
+        val old = launch { model.translate("old", false, Language.ENGLISH, Language.VIETNAMESE) {} }
+        saveStarted.await()
+        old.cancel()
+        model.translate("", false, Language.ENGLISH, Language.VIETNAMESE) {}
+        finishSave.complete(Unit)
+        old.join()
+        model.translate("new", false, Language.ENGLISH, Language.VIETNAMESE) {}
+        assertEquals(listOf("old", "new"), history.saved)
+    }
 
     @Test fun cancelledLateResultCannotReplaceNewTranslationOrEnterHistory() = runTest {
         val oldResult = CompletableDeferred<String>()
@@ -32,13 +86,19 @@ class TextTranslationViewModelTest {
     }
 
     @Test fun waitsForTypingAndSkipsComposingInput() = runTest {
+        val expired = CompletableDeferred<Unit>()
+        countdown = Countdown { milliseconds ->
+            assertEquals(450L, milliseconds)
+            expired.await()
+        }
         var calls = 0
         val model = viewModel({ _, _, _ -> calls++; "Xin chào" })
         model.translate("Hello", true, Language.ENGLISH, Language.VIETNAMESE) {}
         assertEquals(0, calls)
         val work = launch { model.translate("Hello", false, Language.ENGLISH, Language.VIETNAMESE) {} }
-        advanceTimeBy(449)
+        runCurrent()
         assertEquals(0, calls)
+        expired.complete(Unit)
         work.join()
         assertEquals(1, calls)
         assertEquals("Xin chào", model.state.value.result)
@@ -66,15 +126,18 @@ class TextTranslationViewModelTest {
             override suspend fun detect(text: String) = Language.AUTO
             override suspend fun translate(lines: List<String>, source: Language, target: Language) =
                 lines.map { translateText(it, source, target) }
-        }, history)
+        }, history, countdown)
 
     private class History : TranslationHistoryRepository {
         val saved = mutableListOf<String>()
         var failSave = false
+        var beforeSave: suspend (String) -> Unit = {}
         override suspend fun entries() = emptyList<TranslationHistoryEntry>()
-        override suspend fun add(original: String, translated: String, source: Language, target: Language) {
+        override suspend fun add(original: String, translated: String, source: Language, target: Language, replaceId: Long?): Long? {
             check(!failSave)
-            saved += original
+            beforeSave(original)
+            if (replaceId != null) saved[replaceId.toInt() - 1] = original else saved += original
+            return replaceId ?: saved.size.toLong()
         }
         override suspend fun setBookmarked(id: Long, bookmarked: Boolean) = Unit
         override suspend fun delete(ids: Set<Long>) = Unit

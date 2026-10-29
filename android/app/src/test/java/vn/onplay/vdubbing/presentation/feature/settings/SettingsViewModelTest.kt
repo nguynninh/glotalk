@@ -81,8 +81,43 @@ class SettingsViewModelTest {
         assertEquals(1, first.autoUpdates)
     }
 
+    @Test
+    fun `Gemini Live upload requires a key and saves separately from screen translation`() = runTest(dispatcher) {
+        val fixture = Fixture()
+        val model = fixture.model()
+        model.onSaveGeminiLive("", true)
+        assertFalse(fixture.settings.geminiLiveAudioEnabled)
+        assertTrue(model.state.value.message!!.isError)
+        model.onSaveGeminiLive("  AIza-personal-test  ", true)
+        assertEquals("AIza-personal-test", fixture.settings.geminiLiveKey)
+        assertTrue(fixture.settings.geminiLiveAudioEnabled)
+        assertEquals("", fixture.settings.geminiKey)
+        assertEquals(1, fixture.audioStops)
+        model.onSaveGeminiLive("AIza-personal-test", true)
+        assertEquals(1, fixture.audioStops)
+        model.refreshSystemState()
+        assertEquals("AIza-personal-test", model.state.value.geminiLiveKey)
+        assertTrue(model.state.value.geminiLiveAudioEnabled)
+        model.onSaveGeminiLive("", false)
+        assertEquals("", fixture.settings.geminiLiveKey)
+        assertFalse(fixture.settings.geminiLiveAudioEnabled)
+        assertEquals(2, fixture.audioStops)
+    }
+
+    @Test
+    fun `malformed Gemini Live key is rejected without replacing saved credentials`() = runTest(dispatcher) {
+        val fixture = Fixture()
+        val model = fixture.model()
+        model.onSaveGeminiLive("AIza-personal-test", true)
+        model.onSaveGeminiLive("AIza-test\nInjected: header", true)
+        assertEquals("AIza-personal-test", fixture.settings.geminiLiveKey)
+        assertTrue(model.state.value.message!!.isError)
+    }
+
     private class Fixture {
         val settings = object : SettingsRepository {
+            override var geminiLiveKey = ""
+            override var geminiLiveAudioEnabled = false
             override var geminiKey = ""
             override var cloudFallbackEnabled = false
             override var sourceLanguage = Language.AUTO
@@ -96,6 +131,7 @@ class SettingsViewModelTest {
         val background = object : BackgroundStatusRepository {
             override val state = backgroundState
         }
+        var audioStops = 0
         var autoUpdates = 0
         var translatedPair: Pair<Language, Language>? = null
         private val cloud = object : CloudTranslationRepository {
@@ -126,6 +162,7 @@ class SettingsViewModelTest {
         }
         private val services = object : ServiceController {
             override fun start() = Unit
+            override fun stopAudioTranslation() { audioStops++ }
             override fun stop() = Unit
             override fun hideOverlay() = Unit
             override fun showBubble(onTranslate: () -> Unit) = Unit

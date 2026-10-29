@@ -1,13 +1,13 @@
 <resources>
-    <string name="accessibility_service_label">VDubbing — 화면을 읽고 번역</string>
-    <string name="accessibility_service_description">VDubbing은 사용자 또는 다른 앱이 요청할 때 화면 내용을 캡처하고 그 위에 번역을 표시하기 위해 이 권한을 사용합니다. 요청이 없을 때는 화면을 읽지 않습니다.</string>
+    <string name="accessibility_service_label">Glotalk — 화면을 읽고 번역</string>
+    <string name="accessibility_service_description">Glotalk은 사용자 또는 다른 앱이 요청할 때 화면 내용을 캡처하고 그 위에 번역을 표시하기 위해 이 권한을 사용합니다. 요청이 없을 때는 화면을 읽지 않습니다.</string>
 
-    <string name="permission_call_translate_label">VDubbing에 화면 번역 요청</string>
-    <string name="permission_call_translate_desc">이 앱이 VDubbing에 현재 화면의 내용을 읽고 번역하도록 요청할 수 있습니다.</string>
+    <string name="permission_call_translate_label">Glotalk에 화면 번역 요청</string>
+    <string name="permission_call_translate_desc">이 앱이 Glotalk에 현재 화면의 내용을 읽고 번역하도록 요청할 수 있습니다.</string>
 
     <string name="notif_channel_name">백그라운드 번역</string>
-    <string name="notif_channel_desc">VDubbing이 요청 시 번역할 준비가 되었을 때 표시됩니다.</string>
-    <string name="notif_title">VDubbing이 백그라운드에서 실행 중</string>
+    <string name="notif_channel_desc">Glotalk이 요청 시 번역할 준비가 되었을 때 표시됩니다.</string>
+    <string name="notif_title">Glotalk이 백그라운드에서 실행 중</string>
     <string name="notif_text">요청 시 언제든 화면을 번역할 수 있습니다.</string>
     <string name="notif_action_translate">지금 번역</string>
     <string name="notif_action_stop">끄기</string>
@@ -42,7 +42,7 @@
     <string name="status_accessibility">접근성 권한</string>
     <string name="status_needs_rebind">껔다 켜기 필요</string>
     <string name="status_starting">시작 중</string>
-    <string name="status_rebind_hint">Android가 접근성 서비스 연결을 끊었습니다(앱을 덮어 설치한 뒤 흔히 발생). 설정 → 접근성에서 VDubbing을 껐다가 다시 켜세요. 한 번만 하면 됩니다.</string>
+    <string name="status_rebind_hint">Android가 접근성 서비스 연결을 끊었습니다(앱을 덮어 설치한 뒤 흔히 발생). 설정 → 접근성에서 Glotalk을 껐다가 다시 켜세요. 한 번만 하면 됩니다.</string>
     <string name="status_open_accessibility_settings">접근성 설정 열기</string>
     <string name="status_background_service">백그라운드 서비스</string>
     <string name="status_notifications">알림</string>
@@ -98,11 +98,11 @@
 
     <string name="message_cloud_saved">클라우드 설정을 저장했습니다.</string>
     <string name="message_key_valid">API 키가 유효합니다.</string>
-    <string name="message_no_accessibility">접근성 권한이 꺼져 있습니다. 설정 → 접근성을 열어 VDubbing을 켜세요.</string>
+    <string name="message_no_accessibility">접근성 권한이 꺼져 있습니다. 설정 → 접근성을 열어 Glotalk을 켜세요.</string>
     <string name="message_service_waking">접근성은 켜졌지만 서비스가 아직 준비되지 않았습니다. 1~2초 기다린 뒤 다시 시도하세요.</string>
 
     <string name="error_unknown">알 수 없는 오류입니다.</string>
-    <string name="error_accessibility_disabled">VDubbing의 접근성 권한이 켜져 있지 않습니다.</string>
+    <string name="error_accessibility_disabled">Glotalk의 접근성 권한이 켜져 있지 않습니다.</string>
     <string name="error_capture_failed">화면을 캡처할 수 없습니다.</string>
     <string name="error_no_text">화면에서 글자를 인식하지 못했습니다.</string>
     <string name="error_translation_failed">번역에 실패했습니다. 연결을 확인하고 다시 시도하세요.</string>
@@ -135,7 +135,7 @@
     <string name="menu_hide_bubble">버블 숨기기</string>
     <string name="menu_exit">종료</string>
     <string name="bubble_open_panel">번역 패널 열기</string>
-    <string name="notif_open_hint">표시 중인 알림에서 VDubbing을 여세요.</string>
+    <string name="notif_open_hint">표시 중인 알림에서 Glotalk을 여세요.</string>
     <string name="bubble_translating">화면을 번역하는 중…</string>
     <string name="home_screen_tab">화면 번역</string>
     <string name="home_text_tab">텍스트 번역</string>
@@ -182,4 +182,35 @@
     <string name="text_language_vietnamese_full">베트남어</string>
     <string name="text_language_japanese_full">일본어</string>
     <string name="text_language_korean_full">한국어</string>
+    <string name="audio_title">음성 번역</string>
+    <string name="audio_description">앱 오디오 듣기, 번역 및 재생</string>
+    <string name="audio_stop">음성 번역 중지</string>
+    <string name="audio_requesting_permission">오디오 캡처 권한을 기다리는 중</string>
+    <string name="audio_listening">앱 오디오를 듣는 중</string>
+    <string name="audio_translating">음성을 인식하고 번역하는 중</string>
+    <string name="audio_speaking">번역을 읽는 중</string>
+    <string name="audio_no_sound">오디오가 없습니다. 앱이 소리를 재생하고 캡처를 허용하는지 확인하세요.</string>
+    <string name="audio_permission_denied">오디오 캡처 권한이 없습니다. 버블에서 다시 시도하세요.</string>
+    <string name="audio_start_failed">음성 번역을 시작할 수 없습니다. Glotalk을 연 후 버블에서 다시 시도하세요.</string>
+    <string name="audio_capture_failed">앱 오디오를 캡처하지 못해 중지했습니다. 캡처 권한을 확인하세요.</string>
+    <string name="audio_voice_failed">적합한 오프라인 음성이 없어 중지했습니다. Android 설정에서 대상 언어 음성을 설치하세요.</string>
+    <string name="audio_select_app">듣고 싶은 앱을 연 후 버블에서 음성 번역을 켜세요.</string>
+    <string name="audio_network_failed">연결 오류로 중지했습니다. 네트워크를 확인하고 다시 켜세요.</string>
+    <string name="audio_translation_failed">음성을 인식하거나 번역할 수 없습니다. 원본 언어를 선택하고 처음에는 번역 모델 다운로드를 위해 연결하세요.</string>
+    <string name="audio_too_slow">처리가 오디오 속도를 따라가지 못해 중지했습니다. 원본 재생 속도를 낮춰 보세요.</string>
+    <string name="audio_preparing_model">Whisper 준비 중. 최초 다운로드는 약 191 MB입니다.</string>
+    <string name="audio_model_failed">Whisper 모델을 준비할 수 없습니다. 네트워크와 저장 공간을 확인하세요.</string>
+    <string name="gemini_live_section">실시간 음성 번역 · Gemini Live</string>
+    <string name="gemini_live_description">활성화하고 저장하면 선택한 앱의 오디오를 Gemini Live를 통해 Google에 전송합니다. 원본 언어를 자동 감지하고 대상 언어의 음성을 반환하며 Whisper는 로드하지 않습니다. 개인 Gemini API 키를 사용하며 화면 번역 키와 별도로 저장합니다. 비용과 한도는 Google AI Studio 프로젝트에 따라 다릅니다. 번역 음성은 AI가 생성합니다.</string>
+    <string name="gemini_live_key_label">Gemini Live API 키</string>
+    <string name="gemini_live_enable">Gemini Live로 오디오 전송</string>
+    <string name="gemini_live_restart_hint">저장 후 버블에서 음성 번역을 중지하고 다시 시작하세요. 끄면 오프라인 Whisper를 사용합니다. 키를 지우고 저장하면 기기에서 삭제됩니다.</string>
+    <string name="gemini_live_saved">Gemini Live 설정이 저장되었습니다. 음성 번역을 중지한 후 다시 시작하세요.</string>
+    <string name="gemini_live_save_failed">Gemini Live 키를 저장하지 못했습니다. 다시 시도하세요.</string>
+    <string name="gemini_live_key_required">Gemini Live 키가 없거나 유효하지 않거나 접근 권한이 없습니다. 설정에서 API 키를 입력하고 저장하세요.</string>
+    <string name="gemini_live_api_failed">Gemini Live가 번역 세션을 처리하지 못했습니다. gemini-3.5-live-translate-preview 접근 권한과 대상 언어를 확인하세요.</string>
+    <string name="gemini_live_connecting">Gemini Live에 연결 중</string>
+    <string name="gemini_live_limit_failed">Gemini Live 할당량 또는 요청 빈도 한도에 도달했습니다. Google AI Studio에서 사용량을 확인한 후 오디오 번역을 다시 시작하세요.</string>
+    <string name="audio_original_volume">원본 소리</string>
+    <string name="audio_translation_volume">번역 음성</string>
 </resources>

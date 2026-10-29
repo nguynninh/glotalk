@@ -23,7 +23,9 @@ import vn.onplay.vdubbing.domain.repository.SettingsRepository
 class TranslationBinderTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val settings = object : SettingsRepository {
-        override var geminiKey = ""
+        override var geminiLiveKey = ""
+            override var geminiLiveAudioEnabled = false
+            override var geminiKey = ""
         override var cloudFallbackEnabled = false
         override var sourceLanguage = Language.ENGLISH
         override var targetLanguage = Language.VIETNAMESE

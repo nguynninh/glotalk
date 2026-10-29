@@ -4,6 +4,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.Translation
 import vn.onplay.vdubbing.domain.model.TranslationException
@@ -16,8 +18,10 @@ internal class TranslationRequestRunner(
     private val setBusy: (Boolean) -> Unit,
     private val onSuccess: (Translation) -> Unit,
 ) {
-    var busy = false
-        private set
+    private val running = MutableStateFlow(false)
+    val busy: Boolean get() = running.value
+
+    suspend fun awaitIdle() { running.first { !it } }
 
     fun translate(source: Language, target: Language, callback: (Result<Translation>) -> Unit) {
         val delivered = AtomicBoolean()
@@ -29,7 +33,7 @@ internal class TranslationRequestRunner(
                 respond(Result.failure(TranslationException.Busy()))
                 return@launch
             }
-            busy = true
+            running.value = true
             val result = try {
                 setBusy(true)
                 prepare()
@@ -41,8 +45,8 @@ internal class TranslationRequestRunner(
             } catch (failure: Exception) {
                 Result.failure(TranslationException.TranslationFailed(failure.message.orEmpty(), failure))
             } finally {
-                busy = false
                 setBusy(false)
+                running.value = false
             }
             respond(result)
         }

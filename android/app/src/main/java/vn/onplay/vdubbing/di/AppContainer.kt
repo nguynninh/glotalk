@@ -9,6 +9,11 @@ import vn.onplay.vdubbing.data.local.TranslationHistoryRepositoryImpl
 import vn.onplay.vdubbing.data.mlkit.OcrRepositoryImpl
 import vn.onplay.vdubbing.data.mlkit.TranslationRepositoryImpl
 import vn.onplay.vdubbing.data.remote.GeminiTranslationRepository
+import java.io.File
+import vn.onplay.vdubbing.data.audio.WhisperAudioTranslationRepository
+import vn.onplay.vdubbing.data.audio.LocalWhisper
+import vn.onplay.vdubbing.data.audio.WhisperModelStore
+import vn.onplay.vdubbing.framework.audio.AudioSessionStore
 import vn.onplay.vdubbing.data.repository.ScreenCaptureRepositoryImpl
 import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.model.TextBlock
@@ -17,6 +22,7 @@ import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.accessibility.ScreenCaptureSource
 import vn.onplay.vdubbing.framework.overlay.OverlayRenderer
 import vn.onplay.vdubbing.framework.service.BackgroundStatusStore
+import vn.onplay.vdubbing.framework.time.AndroidCountdown
 
 /**
  * Shared engine instances used by services and Hilt's presentation bindings.
@@ -29,7 +35,15 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     val backgroundStatus = BackgroundStatusStore()
+    internal val countdown = AndroidCountdown()
     val settings = SettingsRepositoryImpl(appContext)
+    internal val audioSessions = AudioSessionStore()
+    internal val whisperModels = WhisperModelStore(appContext)
+    internal fun audioTranslation(whisper: LocalWhisper, vad: File) =
+        WhisperAudioTranslationRepository(
+            transcribe = { wav, source, prompt -> whisper.transcribe(wav, source, prompt, vad) },
+            translation = translation,
+        )
     val history = TranslationHistoryRepositoryImpl(appContext)
     val captureStore = BitmapCaptureStore()
 

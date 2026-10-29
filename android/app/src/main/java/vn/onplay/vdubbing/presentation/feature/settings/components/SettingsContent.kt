@@ -61,6 +61,7 @@ internal fun SettingsContent(
     onThemeModeChange: (ThemeMode) -> Unit,
     onAppLanguageChange: (AppLanguage) -> Unit,
     onAutoTranslateChange: (Boolean) -> Unit,
+    onSaveGeminiLive: (String, Boolean) -> Unit,
     onSaveCloud: (String, Boolean) -> Unit,
     onVerifyKey: (String) -> Unit,
     onDismissMessage: () -> Unit,
@@ -72,7 +73,7 @@ internal fun SettingsContent(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("VDubbing", style = MaterialTheme.typography.headlineMedium)
+        Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineMedium)
         Text(stringResource(R.string.settings_intro), style = MaterialTheme.typography.bodyMedium)
 
         StatusCard(state, onOpenAccessibility, onRequestNotifications)
@@ -212,6 +213,8 @@ internal fun SettingsContent(
             }
         }
 
+        GeminiLiveAudioSection(state, onSaveGeminiLive)
+
         CloudSection(state, onSaveCloud, onVerifyKey)
 
         state.lastTranslation?.let { translation ->
@@ -310,7 +313,7 @@ private fun SettingsContentPreview() {
             onTranslateNow = {}, onHideOverlay = {}, onShowBubble = {},
             onSourceLanguageChange = {}, onTargetLanguageChange = {},
             onDisplayModeChange = {}, onThemeModeChange = {}, onAppLanguageChange = {},
-            onAutoTranslateChange = {}, onSaveCloud = { _, _ -> },
+            onAutoTranslateChange = {}, onSaveGeminiLive = { _, _ -> }, onSaveCloud = { _, _ -> },
             onVerifyKey = {}, onDismissMessage = {},
         )
     }

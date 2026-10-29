@@ -35,6 +35,7 @@ internal class OverlayMenuContent(private val context: Context, private val ui: 
                         ui.text(
                             ui.string(
                                 when {
+                                    state.audioActive -> state.audioStatusRes
                                     state.translating -> R.string.menu_status_translating
                                     state.hasTranslation -> R.string.menu_status_active
                                     else -> R.string.menu_status_idle
@@ -54,13 +55,14 @@ internal class OverlayMenuContent(private val context: Context, private val ui: 
         // translation is on screen, and it is inert otherwise.
         card.addView(
             ui.menuRow(
-                iconRes = if (state.hasTranslation) {
+                iconRes = if (state.hasTranslation || state.audioActive) {
                     R.drawable.ic_overlay_pause
                 } else {
                     R.drawable.ic_overlay_translate
                 },
                 label = ui.string(
-                    if (state.hasTranslation) R.string.menu_pause else R.string.panel_start,
+                    if (state.audioActive) R.string.audio_stop
+                    else if (state.hasTranslation) R.string.menu_pause else R.string.panel_start,
                 ),
             ) {
                 onToggleTranslation()

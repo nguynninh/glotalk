@@ -4,6 +4,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -17,6 +18,24 @@ import vn.onplay.vdubbing.domain.model.TranslationException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TranslationRequestRunnerTest {
+    @Test fun `idle notification waits for translation cleanup without polling`() = runTest {
+        val finish = CompletableDeferred<Unit>()
+        var idle = false
+        var overlayBusy = false
+        val runner = TranslationRequestRunner(this, { source, target ->
+            finish.await()
+            result(source, target)
+        }, {}, { overlayBusy = it }, {})
+        runner.translate(Language.AUTO, Language.ENGLISH) { }
+        runCurrent()
+        launch { runner.awaitIdle(); assertFalse(overlayBusy); idle = true }
+        runCurrent()
+        assertFalse(idle)
+        finish.complete(Unit)
+        runCurrent()
+        assertTrue(idle)
+    }
+
     @Test
     fun `queued requests admit one translation and reject the other without changing its languages`() = runTest {
         val finish = CompletableDeferred<Unit>()

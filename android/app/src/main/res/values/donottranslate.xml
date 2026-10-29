@@ -1,6 +1,6 @@
 <resources>
     <!-- Brand and technical terms: the same in every locale. -->
-    <string name="app_name" translatable="false">VDubbing</string>
+    <string name="app_name" translatable="false">Glotalk</string>
     <string name="cloud_api_key_label" translatable="false">Gemini API key</string>
 
     <!-- Endonyms: a language is always written in that language, never translated. -->

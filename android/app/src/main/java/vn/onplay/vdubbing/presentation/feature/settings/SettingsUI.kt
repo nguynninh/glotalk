@@ -33,6 +33,7 @@ fun SettingsUI(
         onThemeModeChange = viewModel::onThemeModeChange,
         onAppLanguageChange = viewModel::onAppLanguageChange,
         onAutoTranslateChange = viewModel::onAutoTranslateChange,
+        onSaveGeminiLive = viewModel::onSaveGeminiLive,
         onSaveCloud = viewModel::onSaveCloud,
         onVerifyKey = viewModel::onVerifyKey,
         onDismissMessage = viewModel::consumeMessage,
@@ -51,7 +52,7 @@ internal fun SettingsUIPreview() {
             onTranslateNow = {}, onHideOverlay = {}, onShowBubble = {},
             onSourceLanguageChange = {}, onTargetLanguageChange = {},
             onDisplayModeChange = {}, onThemeModeChange = {}, onAppLanguageChange = {},
-            onAutoTranslateChange = {}, onSaveCloud = { _, _ -> },
+            onAutoTranslateChange = {}, onSaveGeminiLive = { _, _ -> }, onSaveCloud = { _, _ -> },
             onVerifyKey = {}, onDismissMessage = {},
         )
     }

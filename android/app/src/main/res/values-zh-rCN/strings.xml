@@ -1,13 +1,13 @@
 <resources>
-    <string name="accessibility_service_label">VDubbing — 读取并翻译屏幕</string>
-    <string name="accessibility_service_description">VDubbing 使用此权限，在你或其他应用请求时截取屏幕上的内容，并叠加显示译文。未收到请求时不会读取屏幕。</string>
+    <string name="accessibility_service_label">Glotalk — 读取并翻译屏幕</string>
+    <string name="accessibility_service_description">Glotalk 使用此权限，在你或其他应用请求时截取屏幕上的内容，并叠加显示译文。未收到请求时不会读取屏幕。</string>
 
-    <string name="permission_call_translate_label">调用 VDubbing 翻译屏幕</string>
-    <string name="permission_call_translate_desc">允许此应用请求 VDubbing 读取并翻译当前屏幕上的内容。</string>
+    <string name="permission_call_translate_label">调用 Glotalk 翻译屏幕</string>
+    <string name="permission_call_translate_desc">允许此应用请求 Glotalk 读取并翻译当前屏幕上的内容。</string>
 
     <string name="notif_channel_name">后台翻译</string>
-    <string name="notif_channel_desc">VDubbing 随时可按需翻译时显示。</string>
-    <string name="notif_title">VDubbing 正在后台运行</string>
+    <string name="notif_channel_desc">Glotalk 随时可按需翻译时显示。</string>
+    <string name="notif_title">Glotalk 正在后台运行</string>
     <string name="notif_text">随时可按需翻译屏幕。</string>
     <string name="notif_action_translate">立即翻译</string>
     <string name="notif_action_stop">关闭</string>
@@ -42,7 +42,7 @@
     <string name="status_accessibility">无障碍权限</string>
     <string name="status_needs_rebind">请关闭后重新开启</string>
     <string name="status_starting">正在启动</string>
-    <string name="status_rebind_hint">Android 已断开无障碍服务（通常发生在覆盖安装应用之后）。请进入设置 → 无障碍，将 VDubbing 关闭后再开启。只需操作一次。</string>
+    <string name="status_rebind_hint">Android 已断开无障碍服务（通常发生在覆盖安装应用之后）。请进入设置 → 无障碍，将 Glotalk 关闭后再开启。只需操作一次。</string>
     <string name="status_open_accessibility_settings">打开无障碍设置</string>
     <string name="status_background_service">后台服务</string>
     <string name="status_notifications">通知</string>
@@ -98,11 +98,11 @@
 
     <string name="message_cloud_saved">已保存云端设置。</string>
     <string name="message_key_valid">API 密钥有效。</string>
-    <string name="message_no_accessibility">未开启无障碍权限。请进入设置 → 无障碍，开启 VDubbing。</string>
+    <string name="message_no_accessibility">未开启无障碍权限。请进入设置 → 无障碍，开启 Glotalk。</string>
     <string name="message_service_waking">无障碍已开启，但服务尚未就绪。请等 1–2 秒后重试。</string>
 
     <string name="error_unknown">未知错误。</string>
-    <string name="error_accessibility_disabled">VDubbing 尚未开启无障碍权限。</string>
+    <string name="error_accessibility_disabled">Glotalk 尚未开启无障碍权限。</string>
     <string name="error_capture_failed">无法截取屏幕。</string>
     <string name="error_no_text">未能识别屏幕上的文字。</string>
     <string name="error_translation_failed">翻译失败。请检查网络后重试。</string>
@@ -135,7 +135,7 @@
     <string name="menu_hide_bubble">隐藏悬浮球</string>
     <string name="menu_exit">退出</string>
     <string name="bubble_open_panel">打开翻译面板</string>
-    <string name="notif_open_hint">请从正在显示的通知中打开 VDubbing。</string>
+    <string name="notif_open_hint">请从正在显示的通知中打开 Glotalk。</string>
     <string name="bubble_translating">正在翻译屏幕…</string>
     <string name="home_screen_tab">屏幕翻译</string>
     <string name="home_text_tab">文本翻译</string>
@@ -182,4 +182,35 @@
     <string name="text_language_vietnamese_full">越南语</string>
     <string name="text_language_japanese_full">日语</string>
     <string name="text_language_korean_full">韩语</string>
+    <string name="audio_title">音频翻译</string>
+    <string name="audio_description">收听、翻译并播放应用音频</string>
+    <string name="audio_stop">停止音频翻译</string>
+    <string name="audio_requesting_permission">正在等待音频捕获权限</string>
+    <string name="audio_listening">正在收听应用音频</string>
+    <string name="audio_translating">正在识别并翻译语音</string>
+    <string name="audio_speaking">正在朗读译文</string>
+    <string name="audio_no_sound">未收到音频。请检查应用是否正在播放且允许捕获音频。</string>
+    <string name="audio_permission_denied">未获音频捕获权限，可从悬浮球重试。</string>
+    <string name="audio_start_failed">无法开始音频翻译。请打开 Glotalk 后从悬浮球重试。</string>
+    <string name="audio_capture_failed">因无法捕获应用音频而停止，请检查捕获权限。</string>
+    <string name="audio_voice_failed">因未安装合适的离线语音而停止，请在 Android 设置中安装目标语言语音。</string>
+    <string name="audio_select_app">请打开要收听的应用，然后从悬浮球开启音频翻译。</string>
+    <string name="audio_network_failed">因连接错误而停止，请检查网络后重新开启音频翻译。</string>
+    <string name="audio_translation_failed">无法识别或翻译语音。请选择源语言，首次下载翻译模型时请联网。</string>
+    <string name="audio_too_slow">因处理跟不上音频而停止，请尝试降低源应用的播放速度。</string>
+    <string name="audio_preparing_model">正在准备 Whisper，首次需下载约 191 MB。</string>
+    <string name="audio_model_failed">无法准备 Whisper 模型，请检查网络和可用存储空间后重试。</string>
+    <string name="gemini_live_section">实时音频翻译 · Gemini Live</string>
+    <string name="gemini_live_description">启用并保存后，通过Gemini Live将所选应用的音频发送至Google。自动识别源语言并返回目标语言的语音，不加载Whisper。使用个人Gemini API密钥，与屏幕翻译密钥分开存储。费用和限额取决于您的Google AI Studio项目。翻译语音由AI生成。</string>
+    <string name="gemini_live_key_label">Gemini Live API密钥</string>
+    <string name="gemini_live_enable">将音频发送至Gemini Live</string>
+    <string name="gemini_live_restart_hint">保存后，请从悬浮球停止并重新开启音频翻译以应用设置。关闭后使用离线Whisper。清空密钥并保存可从设备删除密钥。</string>
+    <string name="gemini_live_saved">已保存Gemini Live设置。请停止并重新开启音频翻译。</string>
+    <string name="gemini_live_save_failed">无法保存Gemini Live密钥，请重试。</string>
+    <string name="gemini_live_key_required">Gemini Live密钥缺失、无效或无访问权限。请在设置中输入API密钥并保存。</string>
+    <string name="gemini_live_api_failed">Gemini Live无法处理此次翻译会话。请检查gemini-3.5-live-translate-preview访问权限和目标语言。</string>
+    <string name="gemini_live_connecting">正在连接Gemini Live</string>
+    <string name="gemini_live_limit_failed">Gemini Live已达到配额或请求频率上限。请在Google AI Studio中查看用量后重新开启音频翻译。</string>
+    <string name="audio_original_volume">原声</string>
+    <string name="audio_translation_volume">翻译语音</string>
 </resources>

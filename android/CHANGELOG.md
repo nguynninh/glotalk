@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-10-29
+
+### Added
+
+- Audio translation from the existing bubble: capture one app's playback,
+  recognize speech locally with Whisper Small and Silero VAD, translate transcripts
+  locally with ML Kit, and read them using an offline Android text-to-speech voice.
+  Download and verify the speech models on first use.
+- Cancel capture, recognition, translation and speech when stopping; report
+  missing audio, permission failures and processing backlog.
+- Audio translation requires no API key and sends neither audio nor transcripts
+  to a translation server. Download recognition and translation models on first use.
+
+### Changed
+
+- Replace coroutine delays with cancellable countdowns, frame callbacks and
+  translation state notifications for typing, flashcards, accessibility polling,
+  screenshot preparation and automatic screen translation.
+
 ## [1.0.4] - 2026-10-27
 
 ### Fixed
@@ -154,7 +173,8 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/nguynninh/v-dubbing/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/nguynninh/v-dubbing/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/nguynninh/v-dubbing/compare/v1.0.1...v1.0.2

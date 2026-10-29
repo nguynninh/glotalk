@@ -6,9 +6,17 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
@@ -17,7 +25,7 @@
     <!-- Callers must hold this to bind TranslateService. Normal protection level:
          declared here so other apps can request it in their own manifest. -->
     <permission
-        android:name="vn.onplay.vdubbing.permission.CALL_TRANSLATE"
+        android:name="${applicationId}.permission.CALL_TRANSLATE"
         android:label="@string/permission_call_translate_label"
         android:description="@string/permission_call_translate_desc"
         android:protectionLevel="normal" />
@@ -48,23 +56,35 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".framework.audio.AudioCapturePermissionActivity"
+            android:exported="false"
+            android:taskAffinity="${applicationId}.audio.permission"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.VDubbing.Permission" />
+
+        <service
+            android:name=".framework.audio.AudioTranslationService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection|mediaPlayback" />
+
         <service
             android:name=".framework.service.TranslateService"
             android:exported="true"
             android:foregroundServiceType="specialUse"
-            android:permission="vn.onplay.vdubbing.permission.CALL_TRANSLATE">
+            android:permission="${applicationId}.permission.CALL_TRANSLATE">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="On-device OCR and translation of on-screen text, driven on demand by a bound caller." />
             <intent-filter>
-                <action android:name="vn.onplay.vdubbing.TRANSLATE" />
+                <action android:name="${applicationId}.TRANSLATE" />
             </intent-filter>
         </service>
 
         <service
             android:name=".framework.accessibility.ScreenReaderAccessibilityService"
             android:exported="true"
-            android:label="@string/accessibility_service_label"
+            android:label="@string/app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

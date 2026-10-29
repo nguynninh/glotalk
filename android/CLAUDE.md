@@ -167,7 +167,10 @@ Do not assume a dependency version.
 
 Read the actual dependency configuration.
 
-This repository has only Gradle/AGP dependencies: no npm, no CocoaPods, no SPM,
+Native speech recognition uses whisper.cpp through CMake/JNI. Its version, NDK
+and CMake versions live in the version catalog; the source archive has a pinned
+SHA-256 in `app/src/main/cpp/CMakeLists.txt`. Model URLs, sizes and checksums live
+in `WhisperModelStore`. There is no npm, CocoaPods or SPM.
 Hilt injects presentation ViewModels while services share `AppContainer` engines.
 
 ---
@@ -352,8 +355,8 @@ surfaces of this project, all of which need this check:
   `oneway` callback direction are the contract. Apps outside this repository are
   compiled against them; renaming or retyping a method is a build break for them.
 - **The service identity** — `TranslateService`'s intent action
-  `vn.onplay.vdubbing.TRANSLATE`, its `<service android:name>` path, and the
-  `normal` permission `vn.onplay.vdubbing.permission.CALL_TRANSLATE` that gates
+  `<applicationId>.TRANSLATE`, its `<service android:name>` path, and the
+  `normal` permission `<applicationId>.permission.CALL_TRANSLATE` that gates
   `bindService`. Callers declare that permission by name.
 - **The JSON wire format** — `TranslationJson.kt` produces `engine`,
   `sourceLang`, `targetLang`, `text`, `blocks[]` with
@@ -401,12 +404,14 @@ have changed.
 
 ### Shape
 
-- Two Gradle modules (root project `VDubbing`): `:app` is Kotlin + Jetpack Compose
+- Two Gradle modules (root project `Glotalk`): `:app` is Kotlin + Jetpack Compose
   on Android; `:domain` is a pure Kotlin/JVM library. `app` depends on `domain`,
   never the reverse. No npm or Swift.
 - Build configuration lives in `app/build.gradle.kts` + `gradle/libs.versions.toml`
   (AGP 9.3.3, Kotlin 2.2.10, Compose BOM 2026.02.01, Gradle wrapper 9.5.0).
-  `applicationId` and `namespace` are both `vn.onplay.vdubbing`; `compileSdk` and
+  Production flavor `applicationId` is `vn.onplay.glotalk` (Glotalk); development
+  adds `.dev` (Glotalk Dev). Each has debug/release build types in the `environment`
+  dimension. Source `namespace` remains `vn.onplay.vdubbing`. `compileSdk` and
   `targetSdk` are 36; `minSdk` is 30 because
   `AccessibilityService.takeScreenshot()` starts there.
 - `domain/src/main/kotlin/vn/onplay/vdubbing/domain/` contains models,
@@ -433,14 +438,14 @@ have changed.
 
 | Command | Proves | Notes |
 |---|---|---|
-| `./gradlew assembleDebug` | the app compiles and packages | APK at `app/build/outputs/apk/debug/`; needs `sdk.dir` in `local.properties` |
-| `./gradlew :domain:test :app:testDebugUnitTest` | domain and app JVM tests pass | No device required |
-| `./gradlew :app:assembleDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
-| `./gradlew :app:lintDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors, by design |
+| `./gradlew assembleDevelopmentDebug` | the app compiles and packages | APK at `app/build/outputs/apk/development/debug/`; needs `sdk.dir` in `local.properties` |
+| `./gradlew :domain:test :app:testDevelopmentDebugUnitTest` | domain and app JVM tests pass | No device required |
+| `./gradlew :app:assembleDevelopmentDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
+| `./gradlew :app:lintDevelopmentDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors, by design |
 
 Instrumentation tests cover overlay rendering, window order, dropdowns, Compose
 screens, ML Kit and the AIDL adapter. They require a connected device via
-`./gradlew :app:connectedDebugAndroidTest`. They do not prove the full
+`./gradlew :app:connectedDevelopmentDebugAndroidTest`. They do not prove the full
 accessibility-service, cross-process AIDL or restart lifecycle. Those need manual
 checks with accessibility enabled. A passing build only proves compilation.
 
@@ -454,7 +459,8 @@ it as a regression.
 
 ### Invariants — do not change unless asked
 
-- `applicationId` / `namespace` `vn.onplay.vdubbing`, `minSdk 30`, and the
+- Production `applicationId` `vn.onplay.glotalk`, development `applicationId`
+  `vn.onplay.glotalk.dev`, source `namespace` `vn.onplay.vdubbing`, `minSdk 30`, and the
   `TranslateService` / accessibility-service class names: the permission, the
   intent action and the system's accessibility binding all point at them.
 - `permission.CALL_TRANSLATE` stays `protectionLevel="normal"`. Raising it breaks
@@ -476,6 +482,20 @@ it as a regression.
 
 ### Conventions
 
+- Do not call `delay()` or `Thread.sleep()` in app runtime code. Use cancellable
+  `CountDownTimer` countdowns for scheduling, frame callbacks for rendering, and
+  state notifications for completion. Never add artificial waits to audio capture,
+  recognition, translation or speech playback.
+- `AudioTranslationService` is a private, non-sticky foreground service for
+  playback capture and speech. Its projection grant and source UID belong to one
+  session; do not persist or reuse grants or capture all apps. Offline mode uses
+  Whisper, ML Kit and an installed offline TTS voice. The opt-in Gemini Live mode sends
+  only the selected app's PCM audio directly to Google Gemini Live and streams translated PCM
+  back; it must not initialize Whisper or TTS. Keep the personal key encrypted with
+  Android Keystore in no-backup storage, never in source, logs or AIDL responses.
+  Use `gemini-3.5-live-translate-preview` with 16 kHz PCM input and 24 kHz PCM output.
+  Saving changed Gemini Live settings stops the current audio session. Disconnection or
+  slow queues must stop capture/playback rather than reconnecting silently.
 - Organize each screen under `presentation/feature/<feature>/`. Keep `*UI.kt`
   as the screen entry point receiving its ViewModel via `hiltViewModel()`.
   Feature content belongs in that feature's `components/`; its state, commands

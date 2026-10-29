@@ -52,22 +52,8 @@ class TranslationRepositoryImpl : TranslationRepository {
         if (source == target || !source.isTranslatable || !target.isTranslatable) return@withLock lines
 
         val translator = translatorFor(source, target)
+        prepareTranslator(translator, source, target)
         withContext(Dispatchers.Default) {
-            try {
-                // A cancelled caller must not release the mutex while ML Kit is still using the client.
-                withContext(NonCancellable) {
-                    translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
-                }
-                ensureActive()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                throw TranslationException.TranslationFailed(
-                    "Không tải được model dịch ${source.code}→${target.code} (cần mạng lần đầu).",
-                    e,
-                )
-            }
-
             var failed = 0
             val translated = lines.map { line ->
                 ensureActive()
@@ -93,6 +79,29 @@ class TranslationRepositoryImpl : TranslationRepository {
             translated
         }
     }
+
+    suspend fun prepare(source: Language, target: Language) = translationMutex.withLock {
+        if (source == target || !source.isTranslatable || !target.isTranslatable) return@withLock
+        prepareTranslator(translatorFor(source, target), source, target)
+    }
+
+    private suspend fun prepareTranslator(translator: Translator, source: Language, target: Language) =
+        withContext(Dispatchers.Default) {
+            try {
+                // Model loading must finish before another request uses the cached client.
+                withContext(NonCancellable) {
+                    translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
+                }
+                ensureActive()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                throw TranslationException.TranslationFailed(
+                    "Không tải được model dịch ${source.code}→${target.code} (cần mạng lần đầu).",
+                    e,
+                )
+            }
+        }
 
     private fun translatorFor(source: Language, target: Language): Translator =
         translators.getOrPut("${source.code}>${target.code}") {

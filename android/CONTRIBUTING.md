@@ -1,4 +1,4 @@
-# Contributing to VDubbing
+# Contributing to Glotalk
 
 Thanks for taking an interest. The project uses Kotlin + Jetpack Compose, an Android `:app` module,
 and a pure Kotlin/JVM `:domain` module. Hilt injects ViewModels from the shared
@@ -25,14 +25,27 @@ versions live only in `gradle/libs.versions.toml`.
 
 ## Commands
 
+The `environment` flavor dimension controls identity:
+
+| Flavor | App name | Application ID | Build types |
+|---|---|---|---|
+| `development` | Glotalk Dev | `vn.onplay.glotalk.dev` | `debug`, `release` |
+| `production` | Glotalk | `vn.onplay.glotalk` | `debug`, `release` |
+
+Use `assembleDevelopmentDebug`, `assembleDevelopmentRelease`,
+`assembleProductionDebug` or `assembleProductionRelease` to build a specific
+variant. Configure release signing before distribution. The two flavors have
+separate app data and accessibility grants; debug and release of one flavor share
+an application ID and cannot be installed side by side.
+
 | Command | What it proves | Notes |
 |---|---|---|
-| `./gradlew assembleDebug` | the app compiles and packages | APK at `app/build/outputs/apk/debug/` |
-| `./gradlew :domain:test :app:testDebugUnitTest` | domain and app JVM tests pass | No device required |
-| `./gradlew :app:assembleDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
-| `./gradlew :app:connectedDebugAndroidTest` | instrumentation tests pass | Needs a connected device or emulator |
-| `./gradlew :app:lintDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors by design |
-| `adb install -r app/build/outputs/apk/debug/app-debug.apk` | the APK installs | Reinstalling disconnects the accessibility service; toggle it again in Settings |
+| `./gradlew assembleDevelopmentDebug` | the app compiles and packages | APK at `app/build/outputs/apk/development/debug/` |
+| `./gradlew :domain:test :app:testDevelopmentDebugUnitTest` | domain and app JVM tests pass | No device required |
+| `./gradlew :app:assembleDevelopmentDebugAndroidTest` | instrumentation tests compile and package | Does not run them |
+| `./gradlew :app:connectedDevelopmentDebugAndroidTest` | instrumentation tests pass | Needs a connected device or emulator |
+| `./gradlew :app:lintDevelopmentDebug` | Android Lint is clean | `MissingTranslation` and `MissingQuantity` are errors by design |
+| `adb install -r app/build/outputs/apk/development/debug/app-development-debug.apk` | the APK installs | Reinstalling disconnects the accessibility service; toggle it again in Settings |
 
 Instrumentation tests cover overlay window order, language dropdowns, rendering,
 ML Kit and Compose screens. `TranslationBinderTest` calls the AIDL adapter from a
@@ -99,13 +112,18 @@ Other Android apps can request screen translation through AIDL:
 
 1. Copy `ITranslationService.aidl` and `ITranslationCallback.aidl` from
    `app/src/main/aidl/vn/onplay/vdubbing/`, preserving their package names.
-2. Declare `vn.onplay.vdubbing.permission.CALL_TRANSLATE` in the caller's manifest.
-3. Bind to VDubbing's `TranslateService` with the action
-   `vn.onplay.vdubbing.TRANSLATE` and package `vn.onplay.vdubbing`.
+2. Declare `vn.onplay.glotalk.permission.CALL_TRANSLATE` in the caller's manifest.
+3. Bind to Glotalk's `TranslateService` with the action
+   `vn.onplay.glotalk.TRANSLATE` and package `vn.onplay.glotalk`.
 4. Call `translateNow(source, target, callback)` with language codes such as
    `"ja"` and `"vi"`; the source also accepts `"auto"`.
 
-The user must enable VDubbing's accessibility service before capture can work.
+For Glotalk Dev, use package `vn.onplay.glotalk.dev`, action
+`vn.onplay.glotalk.dev.TRANSLATE` and permission
+`vn.onplay.glotalk.dev.permission.CALL_TRANSLATE`. The AIDL package remains
+`vn.onplay.vdubbing` for both builds.
+
+The user must enable Glotalk's accessibility service before capture can work.
 Results arrive as JSON through `onResult`; failures arrive through `onError`
 with a stable numeric code. Remote callbacks arrive on Binder threads, so the
 caller must dispatch UI updates to its main thread.
@@ -123,9 +141,9 @@ breaking change:
   `app/src/main/aidl/`. Method names, parameter order and types, and the
   `oneway` callback direction are the contract; external apps compile against
   them.
-- **The service identity** — the action `vn.onplay.vdubbing.TRANSLATE`, the
+- **The service identity** — the action `vn.onplay.glotalk.TRANSLATE`, the
   `TranslateService` class path, and the `normal` permission
-  `vn.onplay.vdubbing.permission.CALL_TRANSLATE` that gates `bindService`.
+  `vn.onplay.glotalk.permission.CALL_TRANSLATE` that gates `bindService`.
   Callers declare those by name, so renaming any of them breaks them.
 - **The JSON wire format** — `framework/service/TranslationJson.kt` produces
   `engine`, `sourceLang`, `targetLang`, `text`, and `blocks[]` with
@@ -140,7 +158,8 @@ breaking change:
 
 ## Invariants — Do Not Change Without Being Asked
 
-- `applicationId` / `namespace` `vn.onplay.vdubbing`, `minSdk 30`, and the
+- Production `applicationId` `vn.onplay.glotalk`, development `applicationId` `vn.onplay.glotalk.dev`,
+  source `namespace` `vn.onplay.vdubbing`, `minSdk 30`, and the
   `TranslateService` / accessibility-service class names.
 - `permission.CALL_TRANSLATE` stays `protectionLevel="normal"`. Raising it
   breaks every existing caller's `bindService`.
@@ -158,9 +177,9 @@ breaking change:
 ```bash
 git checkout -b feature/your-feature-name
 # edit app/src/main/...
-./gradlew assembleDebug
-./gradlew :domain:test :app:testDebugUnitTest
-./gradlew :app:lintDebug
+./gradlew assembleDevelopmentDebug
+./gradlew :domain:test :app:testDevelopmentDebugUnitTest
+./gradlew :app:lintDevelopmentDebug
 git commit -m "feat: short description"
 git push origin feature/your-feature-name
 ```

@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:allowAudioPlaybackCapture="true">
+        <activity
+            android:name="vn.onplay.vdubbing.framework.audio.AudioSourceTestActivity"
+            android:exported="true" />
+    </application>
+</manifest>

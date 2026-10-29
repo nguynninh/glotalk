@@ -1,14 +1,14 @@
 <resources>
     <!-- Manifest, accessibility config, notification channel -->
-    <string name="accessibility_service_label">VDubbing — đọc và dịch màn hình</string>
-    <string name="accessibility_service_description">VDubbing dùng quyền này để chụp nội dung đang hiển thị khi bạn hoặc một app khác yêu cầu, rồi hiển thị bản dịch đè lên màn hình. Không đọc nội dung khi bạn không yêu cầu.</string>
+    <string name="accessibility_service_label">Glotalk — đọc và dịch màn hình</string>
+    <string name="accessibility_service_description">Glotalk dùng quyền này để chụp nội dung đang hiển thị khi bạn hoặc một app khác yêu cầu, rồi hiển thị bản dịch đè lên màn hình. Không đọc nội dung khi bạn không yêu cầu.</string>
 
-    <string name="permission_call_translate_label">Gọi VDubbing dịch màn hình</string>
-    <string name="permission_call_translate_desc">Cho phép app này yêu cầu VDubbing đọc và dịch nội dung đang hiển thị trên màn hình.</string>
+    <string name="permission_call_translate_label">Gọi Glotalk dịch màn hình</string>
+    <string name="permission_call_translate_desc">Cho phép app này yêu cầu Glotalk đọc và dịch nội dung đang hiển thị trên màn hình.</string>
 
     <string name="notif_channel_name">Dịch nền</string>
-    <string name="notif_channel_desc">Hiển thị khi VDubbing sẵn sàng dịch theo yêu cầu.</string>
-    <string name="notif_title">VDubbing đang chạy nền</string>
+    <string name="notif_channel_desc">Hiển thị khi Glotalk sẵn sàng dịch theo yêu cầu.</string>
+    <string name="notif_title">Glotalk đang chạy nền</string>
     <string name="notif_text">Sẵn sàng dịch màn hình theo yêu cầu.</string>
     <string name="notif_action_translate">Dịch ngay</string>
     <string name="notif_action_stop">Tắt</string>
@@ -45,7 +45,7 @@
     <string name="status_accessibility">Quyền Trợ năng</string>
     <string name="status_needs_rebind">cần tắt/bật lại</string>
     <string name="status_starting">đang khởi động</string>
-    <string name="status_rebind_hint">Android đã ngắt kết nối dịch vụ Trợ năng (thường xảy ra sau khi cài đè app). Vào Cài đặt → Trợ năng, tắt VDubbing rồi bật lại. Chỉ cần làm một lần.</string>
+    <string name="status_rebind_hint">Android đã ngắt kết nối dịch vụ Trợ năng (thường xảy ra sau khi cài đè app). Vào Cài đặt → Trợ năng, tắt Glotalk rồi bật lại. Chỉ cần làm một lần.</string>
     <string name="status_open_accessibility_settings">Mở Cài đặt Trợ năng</string>
     <string name="status_background_service">Service nền</string>
     <string name="status_notifications">Thông báo</string>
@@ -103,11 +103,11 @@
     <!-- Messages and errors -->
     <string name="message_cloud_saved">Đã lưu cài đặt cloud.</string>
     <string name="message_key_valid">API key hợp lệ.</string>
-    <string name="message_no_accessibility">Chưa bật quyền Trợ năng. Mở Cài đặt → Trợ năng và bật VDubbing.</string>
+    <string name="message_no_accessibility">Chưa bật quyền Trợ năng. Mở Cài đặt → Trợ năng và bật Glotalk.</string>
     <string name="message_service_waking">Đã bật Trợ năng nhưng dịch vụ chưa sẵn sàng. Đợi 1–2 giây rồi thử lại.</string>
 
     <string name="error_unknown">Lỗi không xác định.</string>
-    <string name="error_accessibility_disabled">Chưa bật quyền Trợ năng cho VDubbing.</string>
+    <string name="error_accessibility_disabled">Chưa bật quyền Trợ năng cho Glotalk.</string>
     <string name="error_capture_failed">Không chụp được màn hình.</string>
     <string name="error_no_text">Không nhận diện được chữ trên màn hình.</string>
     <string name="error_translation_failed">Dịch thất bại. Kiểm tra kết nối và thử lại.</string>
@@ -141,7 +141,7 @@
     <string name="menu_hide_bubble">Ẩn bong bóng</string>
     <string name="menu_exit">Thoát</string>
     <string name="bubble_open_panel">Mở bảng dịch</string>
-    <string name="notif_open_hint">Mở VDubbing từ thông báo đang hiển thị.</string>
+    <string name="notif_open_hint">Mở Glotalk từ thông báo đang hiển thị.</string>
     <string name="bubble_translating">Đang dịch màn hình…</string>
     <string name="home_screen_tab">Dịch màn hình</string>
     <string name="home_text_tab">Dịch văn bản</string>
@@ -188,4 +188,35 @@
     <string name="text_language_vietnamese_full">Tiếng Việt</string>
     <string name="text_language_japanese_full">Tiếng Nhật</string>
     <string name="text_language_korean_full">Tiếng Hàn</string>
+    <string name="audio_title">Dịch âm thanh</string>
+    <string name="audio_description">Nghe, dịch và đọc âm thanh của app</string>
+    <string name="audio_stop">Dừng dịch âm thanh</string>
+    <string name="audio_requesting_permission">Đang chờ quyền thu âm thanh</string>
+    <string name="audio_listening">Đang nghe âm thanh của app</string>
+    <string name="audio_translating">Đang nhận dạng và dịch lời nói</string>
+    <string name="audio_speaking">Đang đọc bản dịch</string>
+    <string name="audio_no_sound">Chưa nhận được âm thanh. Kiểm tra app có đang phát tiếng và cho phép thu âm.</string>
+    <string name="audio_permission_denied">Chưa được cấp quyền thu âm thanh. Bạn có thể bật lại từ bubble.</string>
+    <string name="audio_start_failed">Không bắt đầu được dịch âm thanh. Mở Glotalk rồi thử lại từ bubble.</string>
+    <string name="audio_capture_failed">Đã dừng vì không thu được âm thanh của app. Hãy kiểm tra quyền thu âm.</string>
+    <string name="audio_voice_failed">Đã dừng vì chưa có giọng đọc offline phù hợp. Cài giọng đọc của ngôn ngữ đích trong cài đặt Android.</string>
+    <string name="audio_select_app">Mở app muốn nghe rồi bật Dịch âm thanh từ bubble.</string>
+    <string name="audio_network_failed">Đã dừng vì lỗi kết nối. Kiểm tra mạng rồi bật lại Dịch âm thanh.</string>
+    <string name="audio_translation_failed">Không nhận dạng hoặc dịch được lời nói. Chọn đúng ngôn ngữ nguồn và kết nối mạng nếu cần tải model dịch lần đầu.</string>
+    <string name="audio_too_slow">Đã dừng vì xử lý không theo kịp âm thanh. Thử giảm tốc độ phát của app nguồn.</string>
+    <string name="audio_preparing_model">Đang chuẩn bị Whisper. Lần đầu tải khoảng 191 MB.</string>
+    <string name="audio_model_failed">Không chuẩn bị được model Whisper. Kiểm tra mạng, dung lượng trống rồi thử lại.</string>
+    <string name="gemini_live_section">Dịch âm thanh trực tiếp · Gemini Live</string>
+    <string name="gemini_live_description">Bật và lưu để gửi âm thanh của app đang chọn đến Google qua Gemini Live. Tự nhận diện tiếng nguồn và trả giọng dịch theo ngôn ngữ đích; không chạy Whisper trên máy. Dùng API key Gemini cá nhân, lưu riêng với key dịch màn hình. Chi phí và hạn mức theo dự án Google AI Studio của bạn. Giọng dịch do AI tạo.</string>
+    <string name="gemini_live_key_label">API key Gemini Live</string>
+    <string name="gemini_live_enable">Gửi âm thanh đến Gemini Live</string>
+    <string name="gemini_live_restart_hint">Lưu rồi dừng và bật lại Dịch âm thanh từ bubble để áp dụng. Tắt mục này để dùng Whisper offline. Xóa key và lưu để gỡ key khỏi máy.</string>
+    <string name="gemini_live_saved">Đã lưu Gemini Live. Hãy dừng rồi bật lại Dịch âm thanh để áp dụng.</string>
+    <string name="gemini_live_save_failed">Không lưu được key Gemini Live. Hãy thử lại.</string>
+    <string name="gemini_live_key_required">Chưa có key Gemini Live hợp lệ hoặc key không có quyền truy cập. Mở Cài đặt, nhập API key Gemini Live rồi lưu.</string>
+    <string name="gemini_live_api_failed">Gemini Live không xử lý được phiên dịch. Kiểm tra quyền dùng gemini-3.5-live-translate-preview và ngôn ngữ đích.</string>
+    <string name="gemini_live_connecting">Đang kết nối Gemini Live</string>
+    <string name="gemini_live_limit_failed">Gemini Live đã chạm hạn mức hoặc giới hạn tần suất. Kiểm tra mức sử dụng trong Google AI Studio rồi bật lại dịch âm thanh.</string>
+    <string name="audio_original_volume">Âm gốc</string>
+    <string name="audio_translation_volume">Âm dịch</string>
 </resources>

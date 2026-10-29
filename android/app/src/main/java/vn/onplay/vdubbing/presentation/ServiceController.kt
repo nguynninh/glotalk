@@ -8,6 +8,7 @@ interface ServiceController {
     fun hideOverlay()
     fun showBubble(onTranslate: () -> Unit)
     fun setDisplayMode(mode: DisplayMode)
+    fun stopAudioTranslation()
     fun stop()
     fun applyAutoTranslate()
 }

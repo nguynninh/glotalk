@@ -11,7 +11,7 @@ internal object PreviewHistoryRepository : TranslationHistoryRepository {
     )
 
     override suspend fun entries() = sampleEntries
-    override suspend fun add(original: String, translated: String, source: Language, target: Language) = Unit
+    override suspend fun add(original: String, translated: String, source: Language, target: Language, replaceId: Long?): Long? = null
     override suspend fun setBookmarked(id: Long, bookmarked: Boolean) = Unit
     override suspend fun delete(ids: Set<Long>) = Unit
 }

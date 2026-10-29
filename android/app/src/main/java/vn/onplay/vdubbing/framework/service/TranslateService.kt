@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
+import android.media.AudioManager
+import kotlin.math.roundToInt
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
@@ -16,9 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import vn.onplay.vdubbing.MainActivity
+import vn.onplay.vdubbing.BuildConfig
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.VDubbingApp
 import vn.onplay.vdubbing.di.AppContainer
@@ -28,7 +30,11 @@ import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.Translation
 import vn.onplay.vdubbing.domain.model.TranslationException
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
+import vn.onplay.vdubbing.framework.accessibility.awaitOverlayFrames
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
+import vn.onplay.vdubbing.framework.audio.AudioCapturePermissionActivity
+import vn.onplay.vdubbing.framework.audio.AudioTranslationService
+import vn.onplay.vdubbing.framework.audio.messageRes
 import vn.onplay.vdubbing.framework.overlay.OverlayHost
 import vn.onplay.vdubbing.framework.overlay.PanelState
 import vn.onplay.vdubbing.domain.model.BackgroundState
@@ -42,6 +48,8 @@ class TranslateService : Service(), OverlayHost {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val container: AppContainer get() = (application as VDubbingApp).container
+
+    private val audioManager get() = getSystemService(AudioManager::class.java)
 
     private var autoJob: Job? = null
 
@@ -82,6 +90,11 @@ class TranslateService : Service(), OverlayHost {
         }
         showBubble()
         setupAccessibilityCallbacks()
+        scope.launch {
+            container.audioSessions.state.collect {
+                AccessibilityBridge.service?.overlayRenderer?.refresh()
+            }
+        }
         if (container.settings.autoTranslate) {
             startAutoTranslate()
         }
@@ -91,7 +104,7 @@ class TranslateService : Service(), OverlayHost {
         when (intent?.action) {
             ACTION_TRANSLATE -> translate(container.settings.targetLanguage) { }
             ACTION_STOP -> {
-                stopSelf()
+                onStopService()
                 return START_NOT_STICKY
             }
             ACTION_SET_AUTO -> {
@@ -115,6 +128,7 @@ class TranslateService : Service(), OverlayHost {
 
     override fun onDestroy() {
         isRunning = false
+        AudioTranslationService.stop(this)
         AppLocaleController.removeListener(localeListener)
         stopAutoTranslate()
         // Stopping the service must take everything off the screen, or the user
@@ -175,7 +189,7 @@ class TranslateService : Service(), OverlayHost {
             prepare = {
                 translatedPackage = AccessibilityBridge.service?.foregroundPackage()
                 AccessibilityBridge.service?.overlayRenderer?.dismissTransientWindows()
-                delay(CAPTURE_SETTLE_MS)
+                awaitOverlayFrames()
             },
             setBusy = { if (isRunning) AccessibilityBridge.service?.overlayRenderer?.setBusy(it) },
             onSuccess = {
@@ -226,8 +240,8 @@ class TranslateService : Service(), OverlayHost {
     private fun scheduleAutoTranslate(debounceMs: Long) {
         autoJob?.cancel()
         autoJob = scope.launch {
-            delay(debounceMs)
-            while (busy) delay(100)
+            container.countdown.await(debounceMs)
+            requests.awaitIdle()
             if (container.settings.autoTranslate) {
                 translate(container.settings.targetLanguage) { reportFailureQuietly(it) }
             }
@@ -261,13 +275,19 @@ class TranslateService : Service(), OverlayHost {
         // Asked of the window, not of the last result: a translation the user
         // dismissed is no longer on screen, whatever the service last produced.
         hasTranslation = AccessibilityBridge.service?.overlayRenderer?.hasTranslation == true,
+        originalVolume = volumePercent(AudioManager.STREAM_MUSIC),
+        translationVolume = volumePercent(AudioManager.STREAM_ACCESSIBILITY),
+        audioActive = container.audioSessions.state.value != null,
+        audioStatusRes = container.audioSessions.state.value?.stage?.messageRes ?: 0,
     )
 
     override fun onSourceLanguage(language: Language) {
+        if (language != container.settings.sourceLanguage) AudioTranslationService.stop(this)
         container.settings.sourceLanguage = language
     }
 
     override fun onTargetLanguage(language: Language) {
+        if (language != container.settings.targetLanguage) AudioTranslationService.stop(this)
         container.settings.targetLanguage = language
     }
 
@@ -280,6 +300,46 @@ class TranslateService : Service(), OverlayHost {
         container.settings.autoTranslate = enabled
         if (enabled) startAutoTranslate()
         else stopAutoTranslate()
+    }
+
+    override fun onOriginalVolume(volume: Int) = setVolumePercent(AudioManager.STREAM_MUSIC, volume)
+
+    override fun onTranslationVolume(volume: Int) = setVolumePercent(AudioManager.STREAM_ACCESSIBILITY, volume)
+
+    private fun volumePercent(stream: Int): Int =
+        (audioManager.getStreamVolume(stream) * 100f / audioManager.getStreamMaxVolume(stream)).roundToInt()
+
+    private fun setVolumePercent(stream: Int, volume: Int) {
+        val index = (volume.coerceIn(0, 100) * audioManager.getStreamMaxVolume(stream) / 100f).roundToInt()
+        audioManager.setStreamVolume(stream, index, 0)
+    }
+
+    override fun onAudioTranslation(enabled: Boolean) {
+        if (!enabled) {
+            AudioTranslationService.stop(this)
+            return
+        }
+        if (container.audioSessions.state.value != null) return
+        val sourcePackage = AccessibilityBridge.service?.foregroundPackage()
+        if (sourcePackage == null || sourcePackage == packageName) {
+            reportFailure(AppLocaleController.localized(this).getString(R.string.audio_select_app))
+            return
+        }
+        val uid = runCatching { packageManager.getPackageUid(sourcePackage, 0) }.getOrNull()
+        if (uid == null || uid == Process.myUid()) {
+            reportFailure(AppLocaleController.localized(this).getString(R.string.audio_select_app))
+            return
+        }
+        val session = container.audioSessions.begin(
+            sourcePackage, uid, container.settings.sourceLanguage, container.settings.targetLanguage,
+        )
+        AccessibilityBridge.service?.overlayRenderer?.dismissTransientWindows()
+        try {
+            startActivity(AudioCapturePermissionActivity.intent(this, session.id))
+        } catch (_: RuntimeException) {
+            container.audioSessions.end(session.id)
+            reportFailure(AppLocaleController.localized(this).getString(R.string.audio_start_failed))
+        }
     }
 
     override fun onStartTranslation() {
@@ -319,6 +379,7 @@ class TranslateService : Service(), OverlayHost {
     }
 
     override fun onStopTranslation() {
+        AudioTranslationService.stop(this)
         AccessibilityBridge.service?.overlayRenderer?.hide()
     }
 
@@ -340,6 +401,7 @@ class TranslateService : Service(), OverlayHost {
     }
 
     override fun onStopService() {
+        AudioTranslationService.stop(this)
         stopSelf()
     }
 
@@ -358,20 +420,13 @@ class TranslateService : Service(), OverlayHost {
     }
 
     companion object {
-        const val ACTION_BIND = "vn.onplay.vdubbing.TRANSLATE"
-        const val PERMISSION = "vn.onplay.vdubbing.permission.CALL_TRANSLATE"
-        internal const val ACTION_TRANSLATE = "vn.onplay.vdubbing.action.TRANSLATE"
-        internal const val ACTION_STOP = "vn.onplay.vdubbing.action.STOP"
-        private const val ACTION_SET_AUTO = "vn.onplay.vdubbing.action.SET_AUTO"
+        const val ACTION_BIND = BuildConfig.APPLICATION_ID + ".TRANSLATE"
+        const val PERMISSION = BuildConfig.APPLICATION_ID + ".permission.CALL_TRANSLATE"
+        internal const val ACTION_TRANSLATE = BuildConfig.APPLICATION_ID + ".action.TRANSLATE"
+        internal const val ACTION_STOP = BuildConfig.APPLICATION_ID + ".action.STOP"
+        private const val ACTION_SET_AUTO = BuildConfig.APPLICATION_ID + ".action.SET_AUTO"
         private const val WINDOW_DEBOUNCE_MS = 1500L
         private const val SCROLL_DEBOUNCE_MS = 800L
-
-        /**
-         * Time for the panel to disappear before the screenshot is taken. A
-         * frame would be enough on paper; real devices compose overlays on the
-         * next vsync, and a capture taken during removal still shows the panel.
-         */
-        private const val CAPTURE_SETTLE_MS = 250L
 
         fun start(context: Context) {
             context.startForegroundService(
@@ -380,6 +435,7 @@ class TranslateService : Service(), OverlayHost {
         }
 
         fun stop(context: Context) {
+            AudioTranslationService.stop(context)
             context.stopService(Intent(context, TranslateService::class.java))
         }
 

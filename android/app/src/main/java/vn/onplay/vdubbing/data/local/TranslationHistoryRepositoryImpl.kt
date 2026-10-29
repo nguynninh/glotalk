@@ -50,9 +50,9 @@ class TranslationHistoryRepositoryImpl(context: Context) : TranslationHistoryRep
         }
     }
 
-    override suspend fun add(original: String, translated: String, source: Language, target: Language) {
-        if (original.isBlank() || translated.isBlank()) return
-        withContext(Dispatchers.IO) {
+    override suspend fun add(original: String, translated: String, source: Language, target: Language, replaceId: Long?): Long? {
+        if (original.isBlank() || translated.isBlank()) return replaceId
+        return withContext(Dispatchers.IO) {
             val db = database.writableDatabase
             val values = ContentValues().apply {
                 put("original", original)
@@ -63,10 +63,24 @@ class TranslationHistoryRepositoryImpl(context: Context) : TranslationHistoryRep
             }
             db.beginTransaction()
             try {
-                val updated = db.update("history", values, "original = ? AND source = ? AND target = ?",
-                    arrayOf(original, source.code, target.code))
-                if (updated == 0) db.insertOrThrow("history", null, values)
+                val existingId = db.rawQuery("SELECT id FROM history WHERE original = ? AND source = ? AND target = ?",
+                    arrayOf(original, source.code, target.code)).use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getLong(0) else null
+                }
+                val savedId = if (existingId != null) {
+                    db.update("history", values, "id = ?", arrayOf(existingId.toString()))
+                    if (replaceId != null && replaceId != existingId) {
+                        db.delete("history", "id = ? AND bookmarked = 0", arrayOf(replaceId.toString()))
+                    }
+                    existingId.takeIf { it == replaceId }
+                } else if (replaceId != null && db.update("history", values, "id = ? AND bookmarked = 0",
+                        arrayOf(replaceId.toString())) > 0) {
+                    replaceId
+                } else {
+                    db.insertOrThrow("history", null, values)
+                }
                 db.setTransactionSuccessful()
+                savedId
             } finally {
                 db.endTransaction()
             }

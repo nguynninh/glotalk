@@ -1,13 +1,13 @@
 <resources>
-    <string name="accessibility_service_label">VDubbing — read and translate the screen</string>
-    <string name="accessibility_service_description">VDubbing uses this permission to capture what is on screen when you or another app asks it to, then shows the translation on top. It does not read the screen when you have not asked.</string>
+    <string name="accessibility_service_label">Glotalk — read and translate the screen</string>
+    <string name="accessibility_service_description">Glotalk uses this permission to capture what is on screen when you or another app asks it to, then shows the translation on top. It does not read the screen when you have not asked.</string>
 
-    <string name="permission_call_translate_label">Ask VDubbing to translate the screen</string>
-    <string name="permission_call_translate_desc">Lets this app ask VDubbing to read and translate what is currently on screen.</string>
+    <string name="permission_call_translate_label">Ask Glotalk to translate the screen</string>
+    <string name="permission_call_translate_desc">Lets this app ask Glotalk to read and translate what is currently on screen.</string>
 
     <string name="notif_channel_name">Background translation</string>
-    <string name="notif_channel_desc">Shown while VDubbing is ready to translate on request.</string>
-    <string name="notif_title">VDubbing is running in the background</string>
+    <string name="notif_channel_desc">Shown while Glotalk is ready to translate on request.</string>
+    <string name="notif_title">Glotalk is running in the background</string>
     <string name="notif_text">Ready to translate the screen on request.</string>
     <string name="notif_action_translate">Translate now</string>
     <string name="notif_action_stop">Turn off</string>
@@ -43,7 +43,7 @@
     <string name="status_accessibility">Accessibility permission</string>
     <string name="status_needs_rebind">toggle off and on</string>
     <string name="status_starting">starting</string>
-    <string name="status_rebind_hint">Android has disconnected the accessibility service (this usually happens after reinstalling the app). Go to Settings → Accessibility, turn VDubbing off and back on. You only need to do this once.</string>
+    <string name="status_rebind_hint">Android has disconnected the accessibility service (this usually happens after reinstalling the app). Go to Settings → Accessibility, turn Glotalk off and back on. You only need to do this once.</string>
     <string name="status_open_accessibility_settings">Open Accessibility settings</string>
     <string name="status_background_service">Background service</string>
     <string name="status_notifications">Notifications</string>
@@ -101,11 +101,11 @@
 
     <string name="message_cloud_saved">Cloud settings saved.</string>
     <string name="message_key_valid">API key is valid.</string>
-    <string name="message_no_accessibility">Accessibility permission is off. Open Settings → Accessibility and enable VDubbing.</string>
+    <string name="message_no_accessibility">Accessibility permission is off. Open Settings → Accessibility and enable Glotalk.</string>
     <string name="message_service_waking">Accessibility is on but the service is not ready yet. Wait a second or two and try again.</string>
 
     <string name="error_unknown">Unknown error.</string>
-    <string name="error_accessibility_disabled">Accessibility permission is not enabled for VDubbing.</string>
+    <string name="error_accessibility_disabled">Accessibility permission is not enabled for Glotalk.</string>
     <string name="error_capture_failed">Could not capture the screen.</string>
     <string name="error_no_text">No text was recognized on screen.</string>
     <string name="error_translation_failed">Translation failed. Check your connection and try again.</string>
@@ -138,7 +138,7 @@
     <string name="menu_hide_bubble">Hide bubble</string>
     <string name="menu_exit">Exit</string>
     <string name="bubble_open_panel">Open translation panel</string>
-    <string name="notif_open_hint">Open VDubbing from its ongoing notification.</string>
+    <string name="notif_open_hint">Open Glotalk from its ongoing notification.</string>
     <string name="bubble_translating">Translating the screen…</string>
     <string name="home_screen_tab">Screen translation</string>
     <string name="home_text_tab">Text translation</string>
@@ -185,4 +185,35 @@
     <string name="text_language_vietnamese_full">Vietnamese</string>
     <string name="text_language_japanese_full">Japanese</string>
     <string name="text_language_korean_full">Korean</string>
+    <string name="audio_title">Audio translation</string>
+    <string name="audio_description">Listen, translate and play app audio</string>
+    <string name="audio_stop">Stop audio translation</string>
+    <string name="audio_requesting_permission">Waiting for audio capture permission</string>
+    <string name="audio_listening">Listening to app audio</string>
+    <string name="audio_translating">Recognizing and translating speech</string>
+    <string name="audio_speaking">Reading the translation</string>
+    <string name="audio_no_sound">No audio received. Check playback and whether the app allows audio capture.</string>
+    <string name="audio_permission_denied">Audio capture permission was not granted. Try again from the bubble.</string>
+    <string name="audio_start_failed">Could not start audio translation. Open Glotalk, then try again from the bubble.</string>
+    <string name="audio_capture_failed">Stopped because app audio could not be captured. Check capture permissions.</string>
+    <string name="audio_voice_failed">Stopped because no suitable offline voice is installed. Install the target language voice in Android settings.</string>
+    <string name="audio_select_app">Open the app you want to listen to, then enable audio translation from the bubble.</string>
+    <string name="audio_network_failed">Stopped due to a connection error. Check your network and enable audio translation again.</string>
+    <string name="audio_translation_failed">Could not recognize or translate speech. Select the source language and connect to download translation models on first use.</string>
+    <string name="audio_too_slow">Stopped because processing could not keep up. Try slowing down source playback.</string>
+    <string name="audio_preparing_model">Preparing Whisper. The first download is about 191 MB.</string>
+    <string name="audio_model_failed">Could not prepare the Whisper model. Check your network and free storage, then retry.</string>
+    <string name="gemini_live_section">Live audio translation · Gemini Live</string>
+    <string name="gemini_live_description">Enable and save to send audio from the selected app to Google through Gemini Live. It detects the source language and returns speech in the target language without loading Whisper. Use your personal Gemini API key, stored separately from the screen translation key. Costs and limits depend on your Google AI Studio project. The translated voice is AI-generated.</string>
+    <string name="gemini_live_key_label">Gemini Live API key</string>
+    <string name="gemini_live_enable">Send audio to Gemini Live</string>
+    <string name="gemini_live_restart_hint">Save, then stop and restart Audio translation from the bubble to apply. Turn this off for offline Whisper. Clear the key and save to remove it from this device.</string>
+    <string name="gemini_live_saved">Gemini Live saved. Stop and restart Audio translation to apply.</string>
+    <string name="gemini_live_save_failed">Could not save the Gemini Live key. Try again.</string>
+    <string name="gemini_live_key_required">An Gemini Live key is missing, invalid, or lacks access. Open Settings, enter your Gemini Live API key, and save.</string>
+    <string name="gemini_live_api_failed">Gemini Live could not process this session. Check access to gemini-3.5-live-translate-preview and the target language.</string>
+    <string name="gemini_live_connecting">Connecting to Gemini Live</string>
+    <string name="gemini_live_limit_failed">Gemini Live reached a quota or request frequency limit. Check usage in Google AI Studio before restarting audio translation.</string>
+    <string name="audio_original_volume">Original audio</string>
+    <string name="audio_translation_volume">Translated audio</string>
 </resources>

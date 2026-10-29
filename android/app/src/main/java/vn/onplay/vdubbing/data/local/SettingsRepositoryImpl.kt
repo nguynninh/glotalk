@@ -21,6 +21,16 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         (context.applicationContext ?: context)
             .getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
+    private val geminiLiveCredentials = GeminiLiveCredentials(context.applicationContext ?: context)
+
+    override var geminiLiveKey: String
+        get() = geminiLiveCredentials.read()
+        set(value) = geminiLiveCredentials.write(value.trim())
+
+    override var geminiLiveAudioEnabled: Boolean
+        get() = prefs.getBoolean("gemini_live_audio_enabled", false)
+        set(value) = prefs.edit { putBoolean("gemini_live_audio_enabled", value) }
+
     override var geminiKey: String
         get() = prefs.getString(KEY_GEMINI_KEY, "").orEmpty()
         set(value) = prefs.edit { putString(KEY_GEMINI_KEY, value.trim()) }

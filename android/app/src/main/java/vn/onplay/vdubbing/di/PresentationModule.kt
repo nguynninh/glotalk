@@ -17,9 +17,11 @@ import vn.onplay.vdubbing.domain.repository.BackgroundStatusRepository
 import vn.onplay.vdubbing.domain.repository.CloudTranslationRepository
 import vn.onplay.vdubbing.domain.repository.SettingsRepository
 import vn.onplay.vdubbing.domain.usecase.TranslateScreenUseCase
+import vn.onplay.vdubbing.domain.time.Countdown
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import vn.onplay.vdubbing.framework.accessibility.SystemAccessibilityStatus
 import vn.onplay.vdubbing.framework.service.TranslateService
+import vn.onplay.vdubbing.framework.time.AndroidCountdown
 import vn.onplay.vdubbing.presentation.AccessibilityStatus
 import vn.onplay.vdubbing.presentation.AppEnvironment
 import vn.onplay.vdubbing.presentation.PermissionChecker
@@ -28,6 +30,9 @@ import vn.onplay.vdubbing.presentation.ServiceController
 @Module
 @InstallIn(SingletonComponent::class)
 object PresentationModule {
+    @Provides
+    fun countdown(): Countdown = AndroidCountdown()
+
     @Provides
     fun container(@ApplicationContext context: Context): AppContainer = (context as VDubbingApp).container
 
@@ -62,6 +67,7 @@ object PresentationModule {
     @Singleton
     fun services(@ApplicationContext context: Context): ServiceController = object : ServiceController {
         override fun start() = TranslateService.start(context)
+        override fun stopAudioTranslation() = vn.onplay.vdubbing.framework.audio.AudioTranslationService.stop(context)
         override fun stop() = TranslateService.stop(context)
         override fun hideOverlay() { AccessibilityBridge.service?.overlayRenderer?.hide() }
         override fun showBubble(onTranslate: () -> Unit) {

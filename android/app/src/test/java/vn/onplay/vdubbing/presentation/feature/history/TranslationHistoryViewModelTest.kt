@@ -75,7 +75,7 @@ class TranslationHistoryViewModelTest {
             check(!fail)
             return records
         }
-        override suspend fun add(original: String, translated: String, source: Language, target: Language) = Unit
+        override suspend fun add(original: String, translated: String, source: Language, target: Language, replaceId: Long?): Long? = null
         override suspend fun setBookmarked(id: Long, bookmarked: Boolean) {
             check(!fail)
             records = records.map { if (it.id == id) it.copy(bookmarked = bookmarked) else it }

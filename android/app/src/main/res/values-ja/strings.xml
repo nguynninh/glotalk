@@ -1,13 +1,13 @@
 <resources>
-    <string name="accessibility_service_label">VDubbing — 画面を読み取って翻訳</string>
-    <string name="accessibility_service_description">VDubbing は、あなたまたは他のアプリからの要求があったときに画面の内容を取得し、その上に翻訳を表示するためにこの権限を使用します。要求がないときに画面を読み取ることはありません。</string>
+    <string name="accessibility_service_label">Glotalk — 画面を読み取って翻訳</string>
+    <string name="accessibility_service_description">Glotalk は、あなたまたは他のアプリからの要求があったときに画面の内容を取得し、その上に翻訳を表示するためにこの権限を使用します。要求がないときに画面を読み取ることはありません。</string>
 
-    <string name="permission_call_translate_label">VDubbing に画面の翻訳を依頼</string>
-    <string name="permission_call_translate_desc">このアプリが VDubbing に、表示中の内容を読み取って翻訳するよう要求できるようにします。</string>
+    <string name="permission_call_translate_label">Glotalk に画面の翻訳を依頼</string>
+    <string name="permission_call_translate_desc">このアプリが Glotalk に、表示中の内容を読み取って翻訳するよう要求できるようにします。</string>
 
     <string name="notif_channel_name">バックグラウンド翻訳</string>
-    <string name="notif_channel_desc">VDubbing が要求に応じて翻訳できる状態のときに表示されます。</string>
-    <string name="notif_title">VDubbing はバックグラウンドで動作中</string>
+    <string name="notif_channel_desc">Glotalk が要求に応じて翻訳できる状態のときに表示されます。</string>
+    <string name="notif_title">Glotalk はバックグラウンドで動作中</string>
     <string name="notif_text">要求に応じていつでも画面を翻訳できます。</string>
     <string name="notif_action_translate">今すぐ翻訳</string>
     <string name="notif_action_stop">停止</string>
@@ -42,7 +42,7 @@
     <string name="status_accessibility">ユーザー補助の権限</string>
     <string name="status_needs_rebind">オフ/オンし直してください</string>
     <string name="status_starting">起動中</string>
-    <string name="status_rebind_hint">Android がユーザー補助サービスを切断しました（アプリを上書きインストールした後によく起こります）。設定 → ユーザー補助 で VDubbing をいったんオフにしてからオンにしてください。必要なのは一度だけです。</string>
+    <string name="status_rebind_hint">Android がユーザー補助サービスを切断しました（アプリを上書きインストールした後によく起こります）。設定 → ユーザー補助 で Glotalk をいったんオフにしてからオンにしてください。必要なのは一度だけです。</string>
     <string name="status_open_accessibility_settings">ユーザー補助の設定を開く</string>
     <string name="status_background_service">バックグラウンドサービス</string>
     <string name="status_notifications">通知</string>
@@ -98,11 +98,11 @@
 
     <string name="message_cloud_saved">クラウド設定を保存しました。</string>
     <string name="message_key_valid">API キーは有効です。</string>
-    <string name="message_no_accessibility">ユーザー補助の権限がオフです。設定 → ユーザー補助 を開いて VDubbing を有効にしてください。</string>
+    <string name="message_no_accessibility">ユーザー補助の権限がオフです。設定 → ユーザー補助 を開いて Glotalk を有効にしてください。</string>
     <string name="message_service_waking">ユーザー補助は有効ですが、サービスがまだ準備できていません。1〜2 秒待ってからもう一度お試しください。</string>
 
     <string name="error_unknown">不明なエラーです。</string>
-    <string name="error_accessibility_disabled">VDubbing のユーザー補助権限が有効になっていません。</string>
+    <string name="error_accessibility_disabled">Glotalk のユーザー補助権限が有効になっていません。</string>
     <string name="error_capture_failed">画面をキャプチャできませんでした。</string>
     <string name="error_no_text">画面から文字を認識できませんでした。</string>
     <string name="error_translation_failed">翻訳に失敗しました。接続を確認して再試行してください。</string>
@@ -135,7 +135,7 @@
     <string name="menu_hide_bubble">バブルを隠す</string>
     <string name="menu_exit">終了</string>
     <string name="bubble_open_panel">翻訳パネルを開く</string>
-    <string name="notif_open_hint">表示中の通知から VDubbing を開いてください。</string>
+    <string name="notif_open_hint">表示中の通知から Glotalk を開いてください。</string>
     <string name="bubble_translating">画面を翻訳しています…</string>
     <string name="home_screen_tab">画面翻訳</string>
     <string name="home_text_tab">テキスト翻訳</string>
@@ -182,4 +182,35 @@
     <string name="text_language_vietnamese_full">ベトナム語</string>
     <string name="text_language_japanese_full">日本語</string>
     <string name="text_language_korean_full">韓国語</string>
+    <string name="audio_title">音声翻訳</string>
+    <string name="audio_description">アプリの音声を聞いて翻訳・再生</string>
+    <string name="audio_stop">音声翻訳を停止</string>
+    <string name="audio_requesting_permission">音声取得の許可を待っています</string>
+    <string name="audio_listening">アプリの音声を聞いています</string>
+    <string name="audio_translating">音声を認識して翻訳しています</string>
+    <string name="audio_speaking">翻訳を読み上げています</string>
+    <string name="audio_no_sound">音声を受信できません。再生とアプリの音声取得許可を確認してください。</string>
+    <string name="audio_permission_denied">音声取得が許可されていません。バブルから再試行できます。</string>
+    <string name="audio_start_failed">音声翻訳を開始できません。Glotalkを開いてからバブルで再試行してください。</string>
+    <string name="audio_capture_failed">アプリの音声を取得できず停止しました。取得権限を確認してください。</string>
+    <string name="audio_voice_failed">対応するオフライン音声がなく停止しました。Android設定で翻訳先言語の音声をインストールしてください。</string>
+    <string name="audio_select_app">聞きたいアプリを開き、バブルから音声翻訳をオンにしてください。</string>
+    <string name="audio_network_failed">接続エラーで停止しました。ネットワークを確認して再度オンにしてください。</string>
+    <string name="audio_translation_failed">音声を認識・翻訳できません。元の言語を選び、初回の翻訳モデル取得時は接続してください。</string>
+    <string name="audio_too_slow">音声処理が追いつかず停止しました。元のアプリの再生速度を下げてください。</string>
+    <string name="audio_preparing_model">Whisperを準備中です。初回は約191 MBをダウンロードします。</string>
+    <string name="audio_model_failed">Whisperモデルを準備できません。ネットワークと空き容量を確認してください。</string>
+    <string name="gemini_live_section">リアルタイム音声翻訳 · Gemini Live</string>
+    <string name="gemini_live_description">有効にして保存すると、選択したアプリの音声をGemini Live経由でGoogleに送信します。元の言語を自動検出し、翻訳先の言語で音声を返します。Whisperは読み込みません。個人のGemini APIキーを使用し、画面翻訳のキーとは別に保存します。料金と利用上限はGoogle AI Studioのプロジェクトに従います。翻訳音声はAIが生成します。</string>
+    <string name="gemini_live_key_label">Gemini Live APIキー</string>
+    <string name="gemini_live_enable">音声をGemini Liveに送信</string>
+    <string name="gemini_live_restart_hint">保存後、バブルから音声翻訳を停止して再開してください。無効にするとオフラインのWhisperを使用します。キーを消して保存すると端末から削除します。</string>
+    <string name="gemini_live_saved">Gemini Liveを保存しました。音声翻訳を停止して再開してください。</string>
+    <string name="gemini_live_save_failed">Gemini Liveキーを保存できませんでした。もう一度お試しください。</string>
+    <string name="gemini_live_key_required">Gemini Liveキーが未入力、無効、またはアクセス権がありません。設定でAPIキーを入力して保存してください。</string>
+    <string name="gemini_live_api_failed">Gemini Liveが翻訳セッションを処理できませんでした。gemini-3.5-live-translate-previewへのアクセス権と翻訳先の言語を確認してください。</string>
+    <string name="gemini_live_connecting">Gemini Liveに接続中</string>
+    <string name="gemini_live_limit_failed">Gemini Liveの使用量またはリクエスト頻度の上限に達しました。Google AI Studioで使用量を確認してから音声翻訳を再開してください。</string>
+    <string name="audio_original_volume">原音</string>
+    <string name="audio_translation_volume">翻訳音声</string>
 </resources>

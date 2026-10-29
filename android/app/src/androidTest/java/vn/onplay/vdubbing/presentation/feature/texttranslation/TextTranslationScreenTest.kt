@@ -40,9 +40,8 @@ class TextTranslationScreenTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<ComposeTestActivity>()
     private fun label(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
-    @Test fun waitsForTypingAndRetranslatesAfterLanguageChangeAndClearsResult() {
+    @Test fun translatesAfterCountdownAndRetranslatesAfterLanguageChangeAndClearsResult() {
         val calls = mutableListOf<String>()
-        compose.mainClock.autoAdvance = false
         translation.translateText = { text, source, target ->
             "$text:${source.code}:${target.code}".also { calls += it }
         }
@@ -51,24 +50,20 @@ class TextTranslationScreenTest {
                 TextTranslationUI(onHistory = {})
             }
         }
-        compose.mainClock.advanceTimeByFrame()
-        compose.onNode(hasSetTextAction()).performTextInput("a")
-        compose.mainClock.advanceTimeBy(200)
-        compose.runOnIdle { assertTrue(calls.isEmpty()) }
-        compose.onNode(hasSetTextAction()).performTextReplacement("ab")
-        compose.mainClock.advanceTimeBy(400)
-        compose.runOnIdle { assertTrue(calls.isEmpty()) }
-        compose.mainClock.advanceTimeBy(100)
+        compose.onNode(hasSetTextAction()).performTextInput("ab")
+        compose.waitUntil(5_000) { calls.size == 1 }
         compose.runOnIdle { assertEquals(listOf("ab:zh:vi"), calls) }
         compose.onNodeWithText("ab:zh:vi").assertIsDisplayed()
-        compose.mainClock.autoAdvance = true
         compose.onNodeWithContentDescription(label(R.string.panel_swap_languages)).performClick()
         compose.waitUntil(5_000) { calls.size == 2 }
         compose.onNodeWithText("ab:vi:zh").assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.text_clear)).performClick()
         compose.onNodeWithText("ab:vi:zh").assertDoesNotExist()
         compose.onNodeWithText(label(R.string.text_input_hint)).assertIsDisplayed()
-        compose.runOnIdle { assertEquals(2, calls.size); assertEquals(2, history.records.size) }
+        compose.runOnIdle { assertEquals(2, calls.size); assertEquals(1, history.records.size) }
+        compose.onNode(hasSetTextAction()).performTextInput("new")
+        compose.waitUntil(5_000) { history.records.size == 2 }
+        compose.runOnIdle { assertEquals(setOf("ab", "new"), history.records.map { it.original }.toSet()) }
     }
 
     @Test fun lateResultCannotOverwriteNewText() {

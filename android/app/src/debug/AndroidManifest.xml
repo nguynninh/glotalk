@@ -1,5 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <activity android:name=".framework.overlay.OverlayTestActivity" android:exported="false" />
         <activity android:name=".ComposeTestActivity" android:exported="false" />
     </application>
 </manifest>

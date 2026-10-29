@@ -9,13 +9,14 @@ import android.graphics.Bitmap
 import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
 import vn.onplay.vdubbing.domain.model.AppLanguage
 import vn.onplay.vdubbing.framework.locale.AppLocaleController
 import vn.onplay.vdubbing.framework.overlay.AccessibilityOverlayRenderer
+import vn.onplay.vdubbing.framework.audio.AudioTranslationService
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlinx.coroutines.delay
 
 /**
  * Owns the two capabilities only an accessibility service has: takeScreenshot()
@@ -104,7 +105,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
                 }
             }
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                lastForegroundPackage = packageName
+                lastForegroundPackage = applicationPackage() ?: lastForegroundPackage
                 // A throw on this path is attributed to the service and gets it disabled
                 // by the system, so a callback bug must not escape here.
                 try {
@@ -129,6 +130,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     }
 
     private fun teardown() {
+        AudioTranslationService.stop(this)
         onWindowChanged = null
         onScreenScrolled = null
         AppLocaleController.removeListener(localeListener)
@@ -139,17 +141,23 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
 
     override fun isReady(): Boolean = true
 
-    /**
-     * The last window that gained focus, excluding our own overlay windows.
-     * Accessibility does not expose a getCurrentPackage() call, so this is
-     * tracked from events; it can be one window stale during a transition,
-     * which is fine for the self-check.
-     */
     override fun foregroundPackage(): String? =
-        // A resumed activity of ours outranks everything the window events said:
-        // the settings screen must not be overlaid, and no overlay window can
-        // make us believe we are in it.
-        if (AppForeground.isOurs) packageName else lastForegroundPackage
+        if (AppForeground.isOurs) packageName else applicationPackage() ?: lastForegroundPackage
+
+    private fun applicationPackage(): String? {
+        val applications = windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+        val window = applications.firstOrNull { it.isFocused }
+            ?: applications.firstOrNull { it.isActive }
+            ?: applications.maxByOrNull { it.layer }
+            ?: return null
+        val root = window.root ?: return null
+        return try {
+            root.packageName?.toString()
+        } finally {
+            @Suppress("DEPRECATION")
+            root.recycle()
+        }
+    }
 
     /**
      * Screenshots arrive as hardware bitmaps, which ML Kit cannot read. Copy to
@@ -159,8 +167,7 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
     override suspend fun capture(): Bitmap {
         overlayRenderer?.setBubbleVisible(false)
         try {
-            // Wait for the compositor to remove our bubble from the captured display.
-            delay(50)
+            awaitOverlayFrames()
             return captureDisplay()
         } finally {
             overlayRenderer?.setBubbleVisible(true)

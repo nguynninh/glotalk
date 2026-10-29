@@ -11,9 +11,12 @@ repository contracts. It depends on Kotlin coroutines, not Android, Compose,
 Hilt, ML Kit, SQLite or HTTP clients. Its tests run without the Android SDK.
 
 `:app` owns Android entry points, implementations, UI, resources and dependency
-wiring. Its `applicationId`, manifest service identities, permission and AIDL
-packages remain `vn.onplay.vdubbing`. Moving domain sources does not change the
-public AIDL methods, JSON fields or error numbers.
+wiring. The production flavor uses `vn.onplay.glotalk` (Glotalk); development uses
+`vn.onplay.glotalk.dev` (Glotalk Dev). Each flavor has debug and release build types.
+Permissions and intent actions use the
+installed application's ID. The source namespace, component class names and AIDL
+package remain `vn.onplay.vdubbing`; public AIDL methods, JSON fields and error
+numbers are unchanged.
 
 Package names are unchanged for domain declarations. Source locations are:
 
@@ -137,9 +140,9 @@ Keep these Android invariants:
 ## Verification
 
 ```bash
-./gradlew :domain:test :app:testDebugUnitTest
-./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
-./gradlew :app:connectedDebugAndroidTest
+./gradlew :domain:test :app:testDevelopmentDebugUnitTest
+./gradlew :app:assembleDevelopmentDebug :app:assembleDevelopmentDebugAndroidTest :app:lintDevelopmentDebug
+./gradlew :app:connectedDevelopmentDebugAndroidTest
 ```
 
 `LayerDependenciesTest` checks forbidden imports, the domain source location and

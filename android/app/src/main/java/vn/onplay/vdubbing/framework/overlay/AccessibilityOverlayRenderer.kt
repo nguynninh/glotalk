@@ -1,6 +1,7 @@
 package vn.onplay.vdubbing.framework.overlay
 
 import android.accessibilityservice.AccessibilityService
+import android.annotation.SuppressLint
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -127,7 +128,7 @@ class AccessibilityOverlayRenderer(
         if (textBlocks.isNotEmpty()) drawTranslation()
         // The panel and the menu are built from strings, so they are rebuilt
         // rather than patched when the interface language changes.
-        if (panel != null) openPanel()
+        if (panel != null && !panelViews.isAdjustingVolume) openPanel()
         if (menu != null) openMenu()
     }
 
@@ -388,6 +389,7 @@ class AccessibilityOverlayRenderer(
      * does not fire once a touch listener is installed, so both gestures are
      * detected here from the event stream.
      */
+    @SuppressLint("ClickableViewAccessibility")
     private fun attachDragAndTap(view: View, params: WindowManager.LayoutParams) {
         var startX = 0
         var startY = 0
@@ -523,10 +525,17 @@ class AccessibilityOverlayRenderer(
         val state = host?.panelState() ?: PanelState()
         val card = menuViews.build(
             state,
-            onToggleTranslation = { closeMenu(); if (state.hasTranslation) hide() else host?.onStartTranslation() },
+            onToggleTranslation = {
+                closeMenu()
+                when {
+                    state.audioActive -> host?.onAudioTranslation(false)
+                    state.hasTranslation -> hide()
+                    else -> host?.onStartTranslation()
+                }
+            },
             onLanguage = { closeMenu(); openPanel() },
             onSettings = { closeMenu(); host?.onOpenAppSettings() },
-            onHideBubble = { closeMenu(); hideBubble() },
+            onHideBubble = { closeMenu(); host?.onAudioTranslation(false); hideBubble() },
             onStopService = { closeMenu(); host?.onStopService() },
         )
 
