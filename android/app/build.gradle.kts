@@ -19,8 +19,8 @@ android {
         // AccessibilityService.takeScreenshot() requires API 30.
         minSdk = 30
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.0.5"
+        versionCode = 7
+        versionName = "1.0.6"
 
         testInstrumentationRunner = providers.gradleProperty("vdubbing.testRunner")
             .getOrElse("vn.onplay.vdubbing.HiltTestRunner")

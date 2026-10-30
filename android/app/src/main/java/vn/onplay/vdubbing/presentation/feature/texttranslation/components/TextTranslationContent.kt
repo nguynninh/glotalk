@@ -181,7 +181,7 @@ internal fun TextTranslationContent(
                     }
                     LanguagePicker(target, { pickingSource = false }, Modifier.width(48.dp), compact = true)
                 }
-                InputButton(R.drawable.ic_text_mic, R.string.text_voice_input, false, onUnavailable, compact = true, modifier = Modifier.weight(1f))
+                InputButton(R.drawable.ic_mic, R.string.text_voice_input, false, onUnavailable, compact = true, modifier = Modifier.weight(1f))
                 InputButton(R.drawable.ic_text_camera, R.string.text_camera, false, onUnavailable, compact = true, modifier = Modifier.weight(1f))
                 InputButton(R.drawable.ic_text_edit, R.string.text_keyboard, false, enterText, compact = true, modifier = Modifier.weight(1f))
             }
@@ -205,7 +205,7 @@ internal fun TextTranslationContent(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    InputButton(R.drawable.ic_text_mic, R.string.text_voice_input, false, onUnavailable)
+                    InputButton(R.drawable.ic_mic, R.string.text_voice_input, false, onUnavailable)
                     InputButton(R.drawable.ic_text_camera, R.string.text_camera, true, onUnavailable)
                     InputButton(R.drawable.ic_text_edit, R.string.text_keyboard, false, enterText)
                 }

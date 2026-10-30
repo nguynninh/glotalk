@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-30
+
+### Changed
+
+- Update the Glotalk launcher icon and use a distinct bug-marked icon for
+  development builds.
+
+### Fixed
+
+- Center and scale adaptive launcher artwork within the safe zone to prevent
+  clipping by launcher masks, and replace the default grid background with white.
+
 ## [1.0.5] - 2026-10-29
 
 ### Added
@@ -173,7 +185,8 @@ First release.
 - On-device mode sends nothing off the device. The Gemini fallback is off until
   the user enables it with their own key, and screenshots go to Google only then.
 
-[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/nguynninh/v-dubbing/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/nguynninh/v-dubbing/compare/v1.0.5...v1.0.6
 [1.0.5]: https://github.com/nguynninh/v-dubbing/compare/v1.0.4...v1.0.5
 [1.0.4]: https://github.com/nguynninh/v-dubbing/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/nguynninh/v-dubbing/compare/v1.0.2...v1.0.3

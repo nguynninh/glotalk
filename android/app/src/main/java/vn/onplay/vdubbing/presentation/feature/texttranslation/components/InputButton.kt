@@ -53,7 +53,7 @@ internal fun InputButton(
 private fun InputButtonPreview() {
     VDubbingTheme {
         Row {
-            InputButton(R.drawable.ic_text_mic, R.string.text_voice_input, false, {})
+            InputButton(R.drawable.ic_mic, R.string.text_voice_input, false, {})
             InputButton(R.drawable.ic_text_edit, R.string.text_keyboard, true, {})
             InputButton(R.drawable.ic_text_camera, R.string.text_camera, false, {}, compact = true)
         }
