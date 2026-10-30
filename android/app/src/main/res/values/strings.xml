@@ -89,6 +89,11 @@
     <string name="language_auto">Tự nhận diện</string>
     <string name="language_unknown">Không rõ</string>
     <string name="app_language_system">Theo hệ thống</string>
+    <string name="app_language_vietnamese">Tiếng Việt</string>
+    <string name="app_language_english">Tiếng Anh</string>
+    <string name="app_language_japanese">Tiếng Nhật</string>
+    <string name="app_language_chinese">Tiếng Trung (Giản thể)</string>
+    <string name="app_language_korean">Tiếng Hàn</string>
     <string name="engine_on_device">on-device</string>
     <string name="engine_cloud">cloud</string>
 

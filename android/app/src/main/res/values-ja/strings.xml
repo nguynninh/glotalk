@@ -85,6 +85,11 @@
     <string name="language_auto">自動判別</string>
     <string name="language_unknown">不明</string>
     <string name="app_language_system">システムに合わせる</string>
+    <string name="app_language_vietnamese">ベトナム語</string>
+    <string name="app_language_english">英語</string>
+    <string name="app_language_japanese">日本語</string>
+    <string name="app_language_chinese">中国語（簡体字）</string>
+    <string name="app_language_korean">韓国語</string>
     <string name="engine_on_device">オンデバイス</string>
     <string name="engine_cloud">クラウド</string>
 

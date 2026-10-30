@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(padding).consumeWindowInsets(padding),
                     ) {
                         SettingsUI(
+                            bottomInset = it,
                             viewModel = viewModel,
                             onRequestNotifications = ::requestNotifications,
                         )

@@ -3,6 +3,7 @@ package vn.onplay.vdubbing.presentation.feature.home
 import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -15,7 +16,7 @@ import vn.onplay.vdubbing.presentation.feature.settings.SettingsUIPreview
 fun HomeUI(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = hiltViewModel(),
-    screenTranslation: @Composable () -> Unit,
+    screenTranslation: @Composable (Dp) -> Unit,
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val showHistory by viewModel.showHistory.collectAsStateWithLifecycle()
@@ -32,7 +33,7 @@ private fun HomeUIPreview() {
             selectedTab = 0, showHistory = false,
             onSelectTab = {}, onOpenHistory = {}, onCloseHistory = {},
         ) {
-            SettingsUIPreview()
+            SettingsUIPreview(bottomInset = it)
         }
     }
 }

@@ -16,11 +16,17 @@ internal fun Language.translationLabel(): String = stringResource(when (this) {
     Language.UNKNOWN -> R.string.language_unknown
 })
 
-internal fun Language.flag(): String = when (this) {
-    Language.CHINESE -> "🇨🇳"
-    Language.VIETNAMESE -> "🇻🇳"
-    Language.ENGLISH -> "🇬🇧"
-    Language.JAPANESE -> "🇯🇵"
-    Language.KOREAN -> "🇰🇷"
-    else -> code
+internal fun Language.flagCountryCode(): String? = when (this) {
+    Language.CHINESE -> "cn"
+    Language.VIETNAMESE -> "vn"
+    Language.ENGLISH -> "gb"
+    Language.JAPANESE -> "jp"
+    Language.KOREAN -> "kr"
+    else -> null
 }
+
+internal fun Language.flag(): String = flagCountryCode()?.uppercase()?.map {
+    String(Character.toChars(0x1F1E6 + it.code - 'A'.code))
+}?.joinToString("") ?: code
+
+internal fun Language.flagUrl(): String? = flagCountryCode()?.let(CountryFlags::url)

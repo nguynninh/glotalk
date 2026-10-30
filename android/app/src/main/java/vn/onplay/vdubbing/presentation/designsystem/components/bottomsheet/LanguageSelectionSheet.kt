@@ -1,7 +1,7 @@
 package vn.onplay.vdubbing.presentation.designsystem.components.bottomsheet
 
 import vn.onplay.vdubbing.presentation.designsystem.help.translationLabel
-import vn.onplay.vdubbing.presentation.designsystem.help.flag
+import vn.onplay.vdubbing.presentation.designsystem.components.LanguageFlag
 import android.content.res.Configuration
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -116,7 +116,7 @@ internal fun LanguageSelectionSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(Modifier.size(32.dp).clip(CircleShape).background(colors.surfaceContainer).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                            Text(option.flag(), fontSize = 28.sp)
+                            LanguageFlag(option, Modifier.size(32.dp))
                         }
                         Text(label, Modifier.weight(1f).padding(horizontal = 10.dp), fontSize = 18.sp)
                         RadioButton(selected = pending == option, onClick = null,

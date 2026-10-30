@@ -20,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -40,7 +42,10 @@ import vn.onplay.vdubbing.presentation.feature.texttranslation.components.TextTr
 fun TextTranslationUI(
     onHistory: () -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 0.dp,
+    isKeyboardVisible: Boolean? = null,
     viewModel: TextTranslationViewModel = hiltViewModel(),
+    onInputFocusChange: (Boolean) -> Unit = {},
 ) {
     var input by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue()) }
     val text = input.text
@@ -73,7 +78,7 @@ fun TextTranslationUI(
 
     val colors = MaterialTheme.colorScheme
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().padding(bottom = bottomInset),
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = if (colors.surface.luminance() > 0.5f) Color.White else colors.surface,
         contentColor = colors.onSurface,
@@ -93,6 +98,8 @@ fun TextTranslationUI(
             onCopyText = copyText,
             onUnavailable = showUnavailable,
             onHistory = onHistory,
+            isKeyboardVisible = isKeyboardVisible,
+            onInputFocusChange = onInputFocusChange,
             modifier = Modifier.padding(padding),
         )
     }

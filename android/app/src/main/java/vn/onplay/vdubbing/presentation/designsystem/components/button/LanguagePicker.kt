@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -15,15 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.presentation.designsystem.theme.VDubbingTheme
-import vn.onplay.vdubbing.presentation.designsystem.help.flag
+import vn.onplay.vdubbing.presentation.designsystem.components.LanguageFlag
 import vn.onplay.vdubbing.presentation.designsystem.help.translationLabel
 
 @Composable
@@ -37,17 +36,13 @@ internal fun LanguagePicker(
     Box(modifier) {
         TextButton(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth().height(if (compact) 40.dp else 24.dp),
-            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier.fillMaxWidth().height(if (compact) 40.dp else 30.dp),
+            shape = RoundedCornerShape(5.dp),
             colors = ButtonDefaults.textButtonColors(containerColor = Color.White, contentColor = Color.Black),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = if (compact) 4.dp else 0.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = if (compact) 6.dp else 0.dp),
         ) {
             if (compact) {
-                Text(
-                    language.flag(),
-                    modifier = Modifier.clearAndSetSemantics { contentDescription = label },
-                    fontSize = 20.sp,
-                )
+                LanguageFlag(language, Modifier.size(24.dp))
             } else {
                 Text(
                     when (language) {

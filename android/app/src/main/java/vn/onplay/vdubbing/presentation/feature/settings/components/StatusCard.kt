@@ -3,10 +3,12 @@ package vn.onplay.vdubbing.presentation.feature.settings.components
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -25,8 +27,12 @@ internal fun StatusCard(
     onOpenAccessibility: () -> Unit,
     onRequestNotifications: () -> Unit,
 ) {
-    Card {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
                 stringResource(R.string.settings_section_status),
                 style = MaterialTheme.typography.titleMedium,
@@ -54,7 +60,7 @@ internal fun StatusCard(
                             stringResource(R.string.status_rebind_hint),
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        Button(onClick = onOpenAccessibility) {
+                        Button(onClick = onOpenAccessibility, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.status_open_accessibility_settings))
                         }
                     }
@@ -63,9 +69,9 @@ internal fun StatusCard(
             StatusLine(stringResource(R.string.status_background_service), state.serviceRunning)
             StatusLine(stringResource(R.string.status_notifications), state.notificationsGranted)
             StatusLine(stringResource(R.string.status_cloud), state.cloudActive)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Always available: users need it to turn the service back off too.
-                Button(onClick = onOpenAccessibility) {
+                Button(onClick = onOpenAccessibility, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         stringResource(
                             if (state.accessibilityReady) {
@@ -77,7 +83,7 @@ internal fun StatusCard(
                     )
                 }
                 if (!state.notificationsGranted) {
-                    OutlinedButton(onClick = onRequestNotifications) {
+                    OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth()) {
                         Text(stringResource(R.string.status_enable_notifications))
                     }
                 }

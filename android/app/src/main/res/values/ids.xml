@@ -1,0 +1,4 @@
+<resources>
+    <item name="home_blur_content" type="id" />
+    <item name="home_blur_navigation" type="id" />
+</resources>

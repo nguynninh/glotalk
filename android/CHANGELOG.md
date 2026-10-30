@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.7] - 2026-10-30
+
+### Changed
+
+- Refresh text translation with shared translation cards, copy and read-aloud
+  actions, language swapping, and a compact input toolbar.
+- Keep text editing controls visible while the input has focus and hide the home
+  navigation until editing ends, including when using a hardware keyboard.
+- Simplify the home layout by removing the blurred navigation backdrop.
+- Display country flag images in language pickers, with emoji fallbacks while
+  loading or offline, and include flag artwork attribution.
+
+### Added
+
+- Shared icon component supporting drawable resources, vectors and remote images.
+- Regression coverage for text input focus and country flag URL mappings.
+
 ## [1.0.6] - 2026-10-30
 
 ### Changed

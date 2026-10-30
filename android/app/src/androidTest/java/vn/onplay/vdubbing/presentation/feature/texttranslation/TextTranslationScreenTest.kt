@@ -1,5 +1,10 @@
 package vn.onplay.vdubbing.presentation.feature.texttranslation
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import dagger.hilt.android.testing.BindValue
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
@@ -9,10 +14,13 @@ import vn.onplay.vdubbing.di.TranslationModule
 import vn.onplay.vdubbing.domain.repository.TranslationHistoryRepository
 import vn.onplay.vdubbing.domain.repository.TranslationRepository
 import vn.onplay.vdubbing.presentation.FakeTextTranslation
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -40,6 +48,41 @@ class TextTranslationScreenTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<ComposeTestActivity>()
     private fun label(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
+    @Test fun tappingInputHintFocusesTheTextField() {
+        compose.setContent {
+            VDubbingTheme { TextTranslationUI(onHistory = {}, isKeyboardVisible = false) }
+        }
+        compose.onNodeWithText(label(R.string.text_input_hint)).performClick()
+        compose.onNode(hasSetTextAction()).assertIsFocused()
+        compose.onNodeWithText(label(R.string.text_language_chinese_full)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.text_language_vietnamese_full)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.text_clear)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.text_import_file)).assertDoesNotExist()
+        compose.onNodeWithContentDescription(label(R.string.text_back)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.text_camera)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.text_back)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.text_back)).assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.home_text_tab)).assertIsDisplayed()
+    }
+
+    @Test fun inputActionsStayAboveTabsWhenSystemInsetsAreConsumed() {
+        compose.setContent {
+            VDubbingTheme {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().testTag("translationRoot")
+                        .consumeWindowInsets(androidx.compose.foundation.layout.PaddingValues(bottom = 80.dp)),
+                ) {
+                    TextTranslationUI(onHistory = {}, bottomInset = 54.dp, isKeyboardVisible = false)
+                }
+            }
+        }
+        val root = compose.onNodeWithTag("translationRoot").fetchSemanticsNode().boundsInRoot
+        val camera = compose.onNodeWithContentDescription(label(R.string.text_camera))
+            .assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+        val tabHeight = with(compose.density) { 54.dp.toPx() }
+        assertTrue("Input actions overlap the tab bar", camera.bottom <= root.bottom - tabHeight)
+    }
+
     @Test fun translatesAfterCountdownAndRetranslatesAfterLanguageChangeAndClearsResult() {
         val calls = mutableListOf<String>()
         translation.translateText = { text, source, target ->
@@ -54,7 +97,8 @@ class TextTranslationScreenTest {
         compose.waitUntil(5_000) { calls.size == 1 }
         compose.runOnIdle { assertEquals(listOf("ab:zh:vi"), calls) }
         compose.onNodeWithText("ab:zh:vi").assertIsDisplayed()
-        compose.onNodeWithContentDescription(label(R.string.panel_swap_languages)).performClick()
+        compose.onAllNodesWithContentDescription(label(R.string.panel_swap_languages))
+            .assertCountEquals(2)[0].performClick()
         compose.waitUntil(5_000) { calls.size == 2 }
         compose.onNodeWithText("ab:vi:zh").assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.text_clear)).performClick()

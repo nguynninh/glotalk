@@ -1,21 +1,37 @@
 package vn.onplay.vdubbing.presentation.feature.home.components
 
 import android.content.res.Configuration
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.sp
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.presentation.designsystem.theme.VDubbingTheme
 import vn.onplay.vdubbing.presentation.feature.history.TranslationHistoryUI
@@ -30,35 +46,78 @@ internal fun HomeContent(
     onOpenHistory: () -> Unit,
     onCloseHistory: () -> Unit,
     modifier: Modifier = Modifier,
-    screenTranslation: @Composable () -> Unit,
+    screenTranslation: @Composable (Dp) -> Unit,
 ) {
+    val colors = MaterialTheme.colorScheme
+    val selectedIconColor = if (colors.surface.luminance() < 0.5f) {
+        Color(0xFFD4FF00)
+    } else {
+        Color(0xFF526600)
+    }
     val tabState = rememberSaveableStateHolder()
+    var inputFocused by remember(selectedTab, showHistory) { mutableStateOf(false) }
     if (showHistory) {
         TranslationHistoryUI(onBack = onCloseHistory, modifier = modifier)
         return
     }
-    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    Column(modifier.fillMaxSize().imePadding()) {
-        Box(Modifier.weight(1f)) {
+    val ime = WindowInsets.ime
+    val density = LocalDensity.current
+    val keyboardVisible by remember(ime, density) {
+        derivedStateOf { ime.getBottom(density) > 0 }
+    }
+    HomeBlurLayout(
+        showNavigation = selectedTab != 1 || !(keyboardVisible || inputFocused),
+        modifier = modifier.fillMaxSize().imePadding(),
+        content = { bottomInset ->
             tabState.SaveableStateProvider(selectedTab) {
                 when (selectedTab) {
-                    0 -> screenTranslation()
-                    1 -> TextTranslationUI(onHistory = onOpenHistory)
-                }
-            }
-        }
-        if (selectedTab != 1 || !keyboardVisible) {
-            PrimaryTabRow(selectedTabIndex = selectedTab) {
-                listOf(R.string.home_screen_tab, R.string.home_text_tab).forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { onSelectTab(index) },
-                        text = { Text(stringResource(title)) },
+                    0 -> screenTranslation(bottomInset)
+                    1 -> TextTranslationUI(
+                        onHistory = onOpenHistory, bottomInset = bottomInset,
+                        isKeyboardVisible = keyboardVisible,
+                        onInputFocusChange = { inputFocused = it },
                     )
                 }
             }
-        }
-    }
+        },
+        navigation = {
+            NavigationBar(
+                modifier = Modifier.height(54.dp),
+                containerColor = Color.Transparent,
+                tonalElevation = 0.dp,
+                windowInsets = WindowInsets(0, 0, 0, 0),
+            ) {
+                listOf(R.string.home_screen_tab, R.string.home_text_tab).forEachIndexed { index, title ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = { onSelectTab(index) },
+                        icon = {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    painterResource(if (index == 0) R.drawable.ic_nav_screen else R.drawable.ic_nav_text),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    stringResource(title),
+                                    fontSize = 10.sp,
+                                    lineHeight = 12.sp,
+                                    color = if (selectedTab == index) colors.onSurface else colors.onSurfaceVariant,
+                                )
+                            }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = selectedIconColor,
+                            selectedTextColor = colors.onSurface,
+                            unselectedIconColor = colors.onSurfaceVariant,
+                            unselectedTextColor = colors.onSurfaceVariant,
+                            indicatorColor = Color.Transparent,
+                        ),
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Preview(name = "HomeUI light", showBackground = true, widthDp = 390, heightDp = 844)
@@ -70,7 +129,7 @@ private fun HomeContentPreview() {
             selectedTab = 0, showHistory = false,
             onSelectTab = {}, onOpenHistory = {}, onCloseHistory = {},
         ) {
-            SettingsUIPreview()
+            SettingsUIPreview(bottomInset = it)
         }
     }
 }

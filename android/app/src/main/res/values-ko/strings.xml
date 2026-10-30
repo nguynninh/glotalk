@@ -85,6 +85,11 @@
     <string name="language_auto">자동 인식</string>
     <string name="language_unknown">알 수 없음</string>
     <string name="app_language_system">시스템 설정 따르기</string>
+    <string name="app_language_vietnamese">베트남어</string>
+    <string name="app_language_english">영어</string>
+    <string name="app_language_japanese">일본어</string>
+    <string name="app_language_chinese">중국어(간체)</string>
+    <string name="app_language_korean">한국어</string>
     <string name="engine_on_device">기기 내</string>
     <string name="engine_cloud">클라우드</string>
 

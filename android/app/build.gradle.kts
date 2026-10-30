@@ -19,8 +19,8 @@ android {
         // AccessibilityService.takeScreenshot() requires API 30.
         minSdk = 30
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.0.6"
+        versionCode = 8
+        versionName = "1.0.7"
 
         testInstrumentationRunner = providers.gradleProperty("vdubbing.testRunner")
             .getOrElse("vn.onplay.vdubbing.HiltTestRunner")
@@ -84,6 +84,9 @@ android {
 }
 
 dependencies {
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+    implementation(libs.blurview)
     implementation(project(":domain"))
     implementation(libs.hilt.android)
     implementation(libs.androidx.hilt.compose)
