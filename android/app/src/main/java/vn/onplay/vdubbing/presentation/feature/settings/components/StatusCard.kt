@@ -10,7 +10,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,6 +25,9 @@ internal fun StatusCard(
     state: SettingsUiState,
     onOpenAccessibility: () -> Unit,
     onRequestNotifications: () -> Unit,
+    onServiceChange: (Boolean) -> Unit,
+    onCloudChange: (Boolean) -> Unit,
+    onBubbleEnabledChange: (Boolean) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -40,6 +42,7 @@ internal fun StatusCard(
             StatusLine(
                 label = stringResource(R.string.status_accessibility),
                 ok = state.accessibilityReady,
+                onCheckedChange = { onOpenAccessibility() },
                 detail = when {
                     state.accessibilityNeedsRebind -> stringResource(R.string.status_needs_rebind)
                     state.accessibilityReady && !state.accessibilityLive ->
@@ -66,28 +69,13 @@ internal fun StatusCard(
                     }
                 }
             }
-            StatusLine(stringResource(R.string.status_background_service), state.serviceRunning)
-            StatusLine(stringResource(R.string.status_notifications), state.notificationsGranted)
-            StatusLine(stringResource(R.string.status_cloud), state.cloudActive)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Always available: users need it to turn the service back off too.
-                Button(onClick = onOpenAccessibility, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        stringResource(
-                            if (state.accessibilityReady) {
-                                R.string.status_accessibility_settings
-                            } else {
-                                R.string.status_enable_accessibility
-                            },
-                        ),
-                    )
-                }
-                if (!state.notificationsGranted) {
-                    OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.status_enable_notifications))
-                    }
-                }
-            }
+            StatusLine(stringResource(R.string.status_interactive_bubble), state.bubbleEnabled, onCheckedChange = onBubbleEnabledChange)
+            StatusLine(stringResource(R.string.status_background_service), state.serviceRunning, onCheckedChange = onServiceChange)
+            StatusLine(stringResource(R.string.status_notifications), state.notificationsGranted, onCheckedChange = {
+                onRequestNotifications()
+            })
+            StatusLine(stringResource(R.string.status_cloud), state.cloudActive, onCheckedChange = onCloudChange)
+
         }
     }
 }
@@ -97,6 +85,6 @@ internal fun StatusCard(
 @Composable
 private fun StatusCardPreview() {
     VDubbingTheme {
-        StatusCard(SettingsUiState(), {}, {})
+        StatusCard(SettingsUiState(), {}, {}, {}, {}, {})
     }
 }

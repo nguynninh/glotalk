@@ -41,6 +41,41 @@ class GeminiLiveCredentialsTest {
         }
     }
 
+    @Test fun openAiKeyIsEncryptedSeparatelyAndProvidersAreExclusive() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val id = "openai-test-${UUID.randomUUID()}"
+        val directory = File(target.cacheDir, id).apply { mkdirs() }
+        val prefs = target.getSharedPreferences(id, Context.MODE_PRIVATE)
+        val context = object : ContextWrapper(target) {
+            override fun getApplicationContext(): Context = this
+            override fun getNoBackupFilesDir() = directory
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences = prefs
+        }
+        try {
+            val settings = SettingsRepositoryImpl(context)
+            assertFalse(settings.openAiRealtimeAudioEnabled)
+            assertEquals("", settings.openAiRealtimeKey)
+            settings.geminiLiveKey = "gemini-test"
+            settings.geminiLiveAudioEnabled = true
+            settings.openAiRealtimeKey = "  sk-personal-test  "
+            settings.openAiRealtimeAudioEnabled = true
+            val reopened = SettingsRepositoryImpl(context)
+            assertEquals("sk-personal-test", reopened.openAiRealtimeKey)
+            assertEquals("gemini-test", reopened.geminiLiveKey)
+            assertTrue(reopened.openAiRealtimeAudioEnabled)
+            assertFalse(reopened.geminiLiveAudioEnabled)
+            assertFalse(File(directory, "openai_realtime-key").readText().contains("sk-personal-test"))
+            reopened.geminiLiveAudioEnabled = true
+            assertFalse(settings.openAiRealtimeAudioEnabled)
+            reopened.openAiRealtimeKey = ""
+            assertEquals("", settings.openAiRealtimeKey)
+            assertFalse(File(directory, "openai_realtime-key").exists())
+        } finally {
+            target.deleteSharedPreferences(id)
+            directory.deleteRecursively()
+        }
+    }
+
     @Test fun encryptedKeySurvivesReopenAndCanBeRemoved() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "key-test-${UUID.randomUUID()}").apply { mkdirs() }

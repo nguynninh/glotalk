@@ -23,13 +23,31 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
 
     private val geminiLiveCredentials = GeminiLiveCredentials(context.applicationContext ?: context)
 
+    private val openAiCredentials = GeminiLiveCredentials(
+        context.applicationContext ?: context, "vdubbing_openai_realtime_api_key", "openai_realtime-key",
+    )
+
+    override var openAiRealtimeKey: String
+        get() = openAiCredentials.read()
+        set(value) = openAiCredentials.write(value.trim())
+
+    override var openAiRealtimeAudioEnabled: Boolean
+        get() = prefs.getBoolean("openai_realtime_audio_enabled", false)
+        set(value) = prefs.edit {
+            putBoolean("openai_realtime_audio_enabled", value)
+            if (value) putBoolean("gemini_live_audio_enabled", false)
+        }
+
     override var geminiLiveKey: String
         get() = geminiLiveCredentials.read()
         set(value) = geminiLiveCredentials.write(value.trim())
 
     override var geminiLiveAudioEnabled: Boolean
         get() = prefs.getBoolean("gemini_live_audio_enabled", false)
-        set(value) = prefs.edit { putBoolean("gemini_live_audio_enabled", value) }
+        set(value) = prefs.edit {
+            putBoolean("gemini_live_audio_enabled", value)
+            if (value) putBoolean("openai_realtime_audio_enabled", false)
+        }
 
     override var geminiKey: String
         get() = prefs.getString(KEY_GEMINI_KEY, "").orEmpty()
@@ -44,6 +62,10 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         get() = Language.fromCode(prefs.getString(KEY_TARGET, Language.VIETNAMESE.code))
             .takeIf { it in Language.TARGETS } ?: Language.VIETNAMESE
         set(value) = prefs.edit { putString(KEY_TARGET, value.code) }
+
+    override var bubbleEnabled: Boolean
+        get() = prefs.getBoolean("bubble_enabled", true)
+        set(value) = prefs.edit { putBoolean("bubble_enabled", value) }
 
     override var autoTranslate: Boolean
         get() = prefs.getBoolean(KEY_AUTO, false)

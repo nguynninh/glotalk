@@ -491,11 +491,16 @@ it as a regression.
   session; do not persist or reuse grants or capture all apps. Offline mode uses
   Whisper, ML Kit and an installed offline TTS voice. The opt-in Gemini Live mode sends
   only the selected app's PCM audio directly to Google Gemini Live and streams translated PCM
-  back; it must not initialize Whisper or TTS. Keep the personal key encrypted with
+  back; the opt-in OpenAI mode uses `gpt-realtime-translate` at
+  `/v1/realtime/translations` with 24 kHz mono PCM16 input and output. Only one
+  online provider may be enabled at a time. Neither online mode may initialize
+  Whisper or TTS. Keep each provider's personal key encrypted separately with
   Android Keystore in no-backup storage, never in source, logs or AIDL responses.
   Use `gemini-3.5-live-translate-preview` with 16 kHz PCM input and 24 kHz PCM output.
-  Saving changed Gemini Live settings stops the current audio session. Disconnection or
-  slow queues must stop capture/playback rather than reconnecting silently.
+  Saving changed online audio settings stops the current audio session. Disconnection or
+  slow queues in online mode must stop capture/playback rather than reconnecting silently.
+  Offline mode finishes the current translation and speech and keeps only the latest
+  waiting clip; it may skip intermediate clips on slow devices.
 - Organize each screen under `presentation/feature/<feature>/`. Keep `*UI.kt`
   as the screen entry point receiving its ViewModel via `hiltViewModel()`.
   Feature content belongs in that feature's `components/`; its state, commands

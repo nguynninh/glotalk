@@ -6,6 +6,7 @@ import vn.onplay.vdubbing.domain.model.DisplayMode
 interface ServiceController {
     fun start()
     fun hideOverlay()
+    fun hideBubble()
     fun showBubble(onTranslate: () -> Unit)
     fun setDisplayMode(mode: DisplayMode)
     fun stopAudioTranslation()

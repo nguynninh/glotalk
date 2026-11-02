@@ -79,8 +79,10 @@ internal fun TextTranslationContent(
     onHistory: () -> Unit,
     modifier: Modifier = Modifier,
     isKeyboardVisible: Boolean? = null,
+    voiceRequest: Int = 0,
     onInputFocusChange: (Boolean) -> Unit = {},
 ) {
+    var showingVoiceInput by rememberSaveable { mutableStateOf(false) }
     var pickingSource by rememberSaveable { mutableStateOf<Boolean?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
     val text = input.text
@@ -98,6 +100,20 @@ internal fun TextTranslationContent(
     val enterText: () -> Unit = {
         focus.requestFocus()
         keyboard?.show()
+    }
+
+    val openVoiceInput: () -> Unit = {
+        keyboard?.hide()
+        focusManager.clearFocus()
+        showingVoiceInput = true
+    }
+
+    var handledVoiceRequest by rememberSaveable { mutableStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(voiceRequest) {
+        if (voiceRequest > handledVoiceRequest) {
+            handledVoiceRequest = voiceRequest
+            openVoiceInput()
+        }
     }
 
     Column(modifier.padding(horizontal = 10.dp)) {
@@ -193,7 +209,7 @@ internal fun TextTranslationContent(
                 onSourceClick = { pickingSource = true },
                 onTargetClick = { pickingSource = false },
                 onSwapLanguages = swapLanguages,
-                onVoiceInput = onUnavailable,
+                onVoiceInput = openVoiceInput,
                 onCameraInput = onUnavailable,
                 onKeyboardInput = enterText,
             )
@@ -217,12 +233,25 @@ internal fun TextTranslationContent(
                     horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    InputButton(R.drawable.ic_mic, R.string.text_voice_input, false, onUnavailable)
+                    InputButton(R.drawable.ic_mic, R.string.text_voice_input, false, openVoiceInput)
                     InputButton(R.drawable.ic_text_camera, R.string.text_camera, true, onUnavailable)
                     InputButton(R.drawable.ic_text_edit, R.string.text_keyboard, false, enterText)
                 }
             }
         }
+    }
+    if (showingVoiceInput) {
+        VoiceInputSheet(
+            source = source,
+            onTranscript = { text ->
+                onInputChange(TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length)))
+            },
+            onResult = { text ->
+                onInputChange(TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length)))
+                showingVoiceInput = false
+            },
+            onDismiss = { showingVoiceInput = false },
+        )
     }
     pickingSource?.let { isSource ->
         LanguageSelectionSheet(

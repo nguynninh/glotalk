@@ -27,12 +27,13 @@ import vn.onplay.vdubbing.presentation.feature.history.components.TranslationHis
 @Composable
 fun TranslationHistoryUI(
     onBack: () -> Unit,
+    startReviewing: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: TranslationHistoryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val entries = state.entries
-    var reviewing by rememberSaveable { mutableStateOf(false) }
+    var reviewing by rememberSaveable { mutableStateOf(startReviewing) }
     val scope = rememberCoroutineScope()
     val colors = MaterialTheme.colorScheme
     val background = if (colors.surface.luminance() > 0.5f) Color.White else colors.surface

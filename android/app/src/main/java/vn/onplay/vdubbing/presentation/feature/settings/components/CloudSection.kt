@@ -1,6 +1,5 @@
 package vn.onplay.vdubbing.presentation.feature.settings.components
 
-import vn.onplay.vdubbing.presentation.designsystem.components.card.Section
 import android.content.res.Configuration
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -9,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -21,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -41,7 +43,7 @@ internal fun CloudSection(
     var enabled by remember(state.cloudEnabled) { mutableStateOf(state.cloudEnabled) }
     var revealed by remember { mutableStateOf(false) }
 
-    Section(stringResource(R.string.cloud_section)) {
+    SettingsGroup(stringResource(R.string.cloud_section)) {
         Text(
             stringResource(R.string.cloud_description),
             style = MaterialTheme.typography.bodySmall,
@@ -51,6 +53,19 @@ internal fun CloudSection(
             onValueChange = { key = it },
             label = { Text(stringResource(R.string.cloud_api_key_label)) },
             singleLine = true,
+            leadingIcon = {
+                Icon(painterResource(R.drawable.ic_key), contentDescription = null)
+            },
+            trailingIcon = {
+                IconButton(onClick = { revealed = !revealed }) {
+                    Icon(
+                        painterResource(if (revealed) R.drawable.ic_visibility_off else R.drawable.ic_visibility),
+                        contentDescription = stringResource(
+                            if (revealed) R.string.cloud_hide_key else R.string.cloud_show_key,
+                        ),
+                    )
+                }
+            },
             visualTransformation = if (revealed) {
                 VisualTransformation.None
             } else {
@@ -64,13 +79,6 @@ internal fun CloudSection(
             Switch(checked = enabled, onCheckedChange = { enabled = it })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { revealed = !revealed }) {
-                Text(
-                    stringResource(
-                        if (revealed) R.string.cloud_hide_key else R.string.cloud_show_key,
-                    ),
-                )
-            }
             OutlinedButton(onClick = { onVerifyKey(key) }, enabled = key.isNotBlank()) {
                 Text(stringResource(R.string.cloud_verify_key))
             }

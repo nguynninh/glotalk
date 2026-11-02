@@ -14,10 +14,11 @@ import kotlinx.coroutines.withContext
 import vn.onplay.vdubbing.data.audio.PcmSpeechChunker
 
 internal class AppAudioCapture(private val projection: MediaProjection, private val uid: Int) {
-    suspend fun collect(onSilence: () -> Unit, onClip: (ByteArray) -> Unit) {
+    suspend fun collect(onSilence: () -> Unit, onClip: suspend (ByteArray) -> Unit) {
         val chunker = PcmSpeechChunker()
         collectFrames(PcmSpeechChunker.SAMPLE_RATE, 20, onSilence) { frame ->
-            chunker.accept(frame)?.let(onClip)
+            val clip = chunker.accept(frame)
+            if (clip != null) onClip(clip)
         }
     }
 

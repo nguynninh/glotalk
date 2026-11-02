@@ -48,6 +48,23 @@ class TextTranslationScreenTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<ComposeTestActivity>()
     private fun label(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
+    @Test fun tappingMicrophoneOpensVoiceInputSheet() {
+        compose.setContent {
+            VDubbingTheme { TextTranslationUI(onHistory = {}, isKeyboardVisible = false) }
+        }
+        compose.onNodeWithContentDescription(label(R.string.text_voice_input)).performClick()
+        compose.onNodeWithText(label(R.string.text_voice_input)).assertIsDisplayed()
+    }
+
+    @Test fun tappingMicrophoneWhileEditingOpensVoiceInputSheet() {
+        compose.setContent {
+            VDubbingTheme { TextTranslationUI(onHistory = {}, isKeyboardVisible = false) }
+        }
+        compose.onNodeWithText(label(R.string.text_input_hint)).performClick()
+        compose.onNodeWithContentDescription(label(R.string.text_voice_input)).performClick()
+        compose.onNodeWithText(label(R.string.text_voice_input)).assertIsDisplayed()
+    }
+
     @Test fun tappingInputHintFocusesTheTextField() {
         compose.setContent {
             VDubbingTheme { TextTranslationUI(onHistory = {}, isKeyboardVisible = false) }

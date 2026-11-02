@@ -63,7 +63,9 @@ class ScreenReaderAccessibilityService : AccessibilityService(), ScreenCaptureSo
         // which looks to the user like the toggle is on but nothing happens.
         // Every step is individually recoverable, so each one is guarded.
         try {
-            overlayRenderer = AccessibilityOverlayRenderer(this)
+            overlayRenderer = AccessibilityOverlayRenderer(this) {
+                (application as vn.onplay.vdubbing.VDubbingApp).container.settings.bubbleEnabled
+            }
             AppLocaleController.addListener(localeListener)
         } catch (t: Throwable) {
             recordFailure("overlay", t)

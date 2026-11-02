@@ -28,7 +28,7 @@ internal class OverlayMenuContent(private val context: Context, private val ui: 
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(ui.px(12f), ui.px(10f), ui.px(12f), ui.px(14f))
-                addView(ui.bubbleAvatar(14f, ui.px(40f)))
+                addView(ui.bubbleAvatar(ui.px(40f)))
                 addView(
                     ui.column(
                         ui.text(ui.string(R.string.panel_title), 16f, Overlay.TEXT, bold = true),

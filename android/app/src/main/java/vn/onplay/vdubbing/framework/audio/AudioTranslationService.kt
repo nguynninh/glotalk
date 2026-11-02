@@ -12,7 +12,6 @@ import android.media.projection.MediaProjectionManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
@@ -25,11 +24,11 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.channelFlow
+import vn.onplay.vdubbing.data.audio.OpenAiRealtimeTranslation
+import vn.onplay.vdubbing.data.audio.OpenAiRealtimeAudioException
 import vn.onplay.vdubbing.data.audio.GeminiLiveTranslation
 import vn.onplay.vdubbing.data.audio.GeminiLiveAudioException
 import kotlinx.coroutines.withContext
@@ -106,8 +105,10 @@ internal class AudioTranslationService : Service() {
             activeProjection.registerCallback(callback, Handler(Looper.getMainLooper()))
             pipeline = scope.launch {
                 try {
-                    if (container.settings.geminiLiveAudioEnabled) {
-                        runGeminiLivePipeline(requested, activeProjection)
+                    if (container.settings.openAiRealtimeAudioEnabled) {
+                        runLivePipeline(requested, activeProjection, openAi = true)
+                    } else if (container.settings.geminiLiveAudioEnabled) {
+                        runLivePipeline(requested, activeProjection, openAi = false)
                     } else {
                         runLocalPipeline(requested, activeProjection)
                     }
@@ -118,6 +119,13 @@ internal class AudioTranslationService : Service() {
                 } catch (error: Exception) {
                     fail(when (error) {
                         is AudioFailure -> error.messageRes
+                        is OpenAiRealtimeAudioException -> when (error.reason) {
+                            OpenAiRealtimeAudioException.Reason.KEY -> R.string.openai_realtime_key_required
+                            OpenAiRealtimeAudioException.Reason.LIMIT -> R.string.openai_realtime_limit_failed
+                            OpenAiRealtimeAudioException.Reason.NETWORK -> R.string.audio_network_failed
+                            OpenAiRealtimeAudioException.Reason.TOO_SLOW -> R.string.audio_too_slow
+                            OpenAiRealtimeAudioException.Reason.API -> R.string.openai_realtime_api_failed
+                        }
                         is GeminiLiveAudioException -> when (error.reason) {
                             GeminiLiveAudioException.Reason.KEY -> R.string.gemini_live_key_required
                             GeminiLiveAudioException.Reason.LIMIT -> R.string.gemini_live_limit_failed
@@ -137,23 +145,26 @@ internal class AudioTranslationService : Service() {
         return START_NOT_STICKY
     }
 
-    private suspend fun runGeminiLivePipeline(current: AudioSession, activeProjection: MediaProjection) {
-        val key = container.settings.geminiLiveKey
-        if (key.isBlank()) throw AudioFailure(R.string.gemini_live_key_required)
+    private suspend fun runLivePipeline(current: AudioSession, activeProjection: MediaProjection, openAi: Boolean) {
+        val key = if (openAi) container.settings.openAiRealtimeKey else container.settings.geminiLiveKey
+        if (key.isBlank()) throw AudioFailure(
+            if (openAi) R.string.openai_realtime_key_required else R.string.gemini_live_key_required,
+        )
         update(AudioStage.CONNECTING)
         val player = RealtimeAudioPlayer().also { realtimePlayer = it }
         val capture = AppAudioCapture(activeProjection, current.uid)
         val input = channelFlow {
             scope.launch { if (session?.id == current.id) update(AudioStage.LISTENING) }
-            capture.collectFrames(16000, 100, onSilence = {
+            capture.collectFrames(if (openAi) 24000 else 16000, 100, onSilence = {
                 scope.launch { if (session?.id == current.id) update(AudioStage.NO_AUDIO) }
             }) { send(it.copyOf()) }
         }.buffer(1)
-        player.play(GeminiLiveTranslation().audio(
-            key, current.target, input,
-        )) {
+        val audio = if (openAi) OpenAiRealtimeTranslation().audio(key, current.target, input)
+            else GeminiLiveTranslation().audio(key, current.target, input)
+        player.play(audio) {
             scope.launch { if (session?.id == current.id) update(AudioStage.SPEAKING) }
         }
+        if (session?.id == current.id) stopSession()
     }
 
     private suspend fun runLocalPipeline(current: AudioSession, activeProjection: MediaProjection) {
@@ -193,56 +204,27 @@ internal class AudioTranslationService : Service() {
         activeProjection: MediaProjection,
         voice: AudioTranslationSpeaker,
         repository: AudioTranslationRepository,
-    ) = coroutineScope {
-        val clips = Channel<CapturedClip>(2)
-        val speech = Channel<SpokenTranslation>(2)
+    ) {
         val translator = TranslateAudioSession(repository, current.source, current.target)
-        update(AudioStage.LISTENING)
-        try {
-            launch {
-                AppAudioCapture(activeProjection, current.uid).collect(
-                    onSilence = { scope.launch {
-                        if (session?.id == current.id) update(AudioStage.NO_AUDIO)
-                    } },
-                    onClip = { wav ->
-                        if (clips.trySend(CapturedClip(wav, SystemClock.elapsedRealtime())).isFailure) {
-                            throw AudioFailure(R.string.audio_too_slow)
-                        }
-                    },
-                )
+        val clips = channelFlow {
+            AppAudioCapture(activeProjection, current.uid).collect(
+                onSilence = { scope.launch {
+                    if (session?.id == current.id) update(AudioStage.NO_AUDIO)
+                } },
+                onClip = { send(it) },
+            )
+        }.buffer(0)
+        playOfflineAudio(clips, translator::translate, speak = { text ->
+            try {
+                voice.speak(text)
+            } catch (_: TimeoutCancellationException) {
+                throw AudioFailure(R.string.audio_voice_failed)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                throw AudioFailure(R.string.audio_voice_failed)
             }
-            launch {
-                for (clip in clips) {
-                    checkFresh(clip.at)
-                    update(AudioStage.TRANSLATING)
-                    val result = translator.translate(clip.wav)
-                    checkFresh(clip.at)
-                    if (result != null) speech.send(SpokenTranslation(result.translated, clip.at))
-                    else update(AudioStage.LISTENING)
-                }
-            }
-            for (utterance in speech) {
-                checkFresh(utterance.at)
-                update(AudioStage.SPEAKING)
-                try {
-                    voice.speak(utterance.text)
-                } catch (_: TimeoutCancellationException) {
-                    throw AudioFailure(R.string.audio_voice_failed)
-                } catch (cancelled: CancellationException) {
-                    throw cancelled
-                } catch (_: Exception) {
-                    throw AudioFailure(R.string.audio_voice_failed)
-                }
-                update(AudioStage.LISTENING)
-            }
-        } finally {
-            clips.cancel()
-            speech.cancel()
-        }
-    }
-
-    private fun checkFresh(at: Long) {
-        if (SystemClock.elapsedRealtime() - at > 30000) throw AudioFailure(R.string.audio_too_slow)
+        }, onStage = ::update)
     }
 
     private fun update(stage: AudioStage) {
@@ -312,8 +294,6 @@ internal class AudioTranslationService : Service() {
             .addAction(0, text(R.string.audio_stop), stop)
     }
 
-    private data class CapturedClip(val wav: ByteArray, val at: Long)
-    private data class SpokenTranslation(val text: String, val at: Long)
     private class AudioFailure(val messageRes: Int) : Exception()
 
     companion object {
@@ -341,7 +321,7 @@ internal class AudioTranslationService : Service() {
 
 internal val AudioStage.messageRes: Int get() = when (this) {
     AudioStage.PERMISSION -> R.string.audio_requesting_permission
-    AudioStage.CONNECTING -> R.string.gemini_live_connecting
+    AudioStage.CONNECTING -> R.string.audio_connecting
     AudioStage.PREPARING_MODEL -> R.string.audio_preparing_model
     AudioStage.LISTENING -> R.string.audio_listening
     AudioStage.TRANSLATING -> R.string.audio_translating

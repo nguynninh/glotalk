@@ -75,7 +75,18 @@ not reused; enter a Gemini key and explicitly enable Live audio translation.
 Changing saved Gemini Live settings stops the current audio session; restart it from
 the bubble to apply. Clear the key and save to remove it from the device.
 
-With Gemini Live disabled, the original offline workflow remains available:
+OpenAI is also available under **Dịch âm thanh trực tiếp · OpenAI** in Settings.
+Enter your personal OpenAI API key, enable **Gửi âm thanh đến OpenAI**, and save.
+This uses [OpenAI Realtime Translation](https://developers.openai.com/api/docs/guides/realtime-translation)
+with `gpt-realtime-translate`: selected-app audio streams as 24 kHz mono PCM16,
+and translated 24 kHz speech plays through the same audio player. It detects the
+source language and uses the selected target language without loading Whisper or TTS.
+The key is encrypted separately with Android Keystore in no-backup storage.
+Usage is billed to your OpenAI API account. Enabling either online provider disables
+the other; saving changed settings stops the current session. No automatic fallback
+or reconnection sends audio to another provider.
+
+With both online providers disabled, the original offline workflow remains available:
 
 1. Enable the background bubble, open the app playing speech, choose your
    languages in the bubble, and turn on **Dịch âm thanh**. No API key is needed.
@@ -102,8 +113,10 @@ versions and the source archive checksum are pinned in the build configuration.
 - Apps can block playback capture. Silence alone cannot distinguish a blocked
   app from paused playback; Glotalk reports that no audio is being received.
 - Offline audio translation processes speech at pauses, with a 5-second maximum chunk.
-  Processing and speech introduce latency. If it cannot keep up, it stops with
-  an error instead of silently dropping queued speech. Performance and accuracy
+  Processing and speech introduce latency. On a slow device it finishes the current
+  translation and speech, then processes the latest waiting clip. Intermediate
+  waiting clips are skipped to bound the backlog; offline mode does not translate
+  every phrase when processing is slower than playback. Performance and accuracy
   depend on the phone, language and audio; simultaneous dubbing is not guaranteed.
 - Before the streaming optimization, the tested Joy 4 running Android 11 took about 26 seconds with Whisper Small Q5_1
   for an 11-second English sample and 26 seconds for a 4.5-second synthetic
@@ -137,9 +150,10 @@ in memory while a request is processed and released afterwards.
 Gemini fallback is optional and disabled by default. Enabling it allows screenshots
 that need cloud processing to be sent to Google using your API key. Text
 translation history and app settings are stored locally. Audio translation uses
-Whisper, ML Kit and an offline TTS voice on the device when Gemini Live is disabled.
+Whisper, ML Kit and an offline TTS voice on the device when both online providers are disabled.
 Gemini Live audio translation is a separate, opt-in mode: selected-app audio is sent
-to Gemini Live and translated speech is streamed back. The app does not record the
+to Gemini Live and translated speech is streamed back. OpenAI is a separate opt-in
+provider that sends selected-app audio to OpenAI instead. The app does not record the
 microphone or persist the audio/transcripts. A personal API key is encrypted with
 Android Keystore in no-backup storage and is never included in the APK or logs.
 Direct personal-key access is intended for the owner of the device; distributing

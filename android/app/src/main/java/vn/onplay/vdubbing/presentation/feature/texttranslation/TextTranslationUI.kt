@@ -41,6 +41,7 @@ import vn.onplay.vdubbing.presentation.feature.texttranslation.components.TextTr
 @Composable
 fun TextTranslationUI(
     onHistory: () -> Unit,
+    voiceRequest: Int = 0,
     modifier: Modifier = Modifier,
     bottomInset: Dp = 0.dp,
     isKeyboardVisible: Boolean? = null,
@@ -98,6 +99,7 @@ fun TextTranslationUI(
             onCopyText = copyText,
             onUnavailable = showUnavailable,
             onHistory = onHistory,
+            voiceRequest = voiceRequest,
             isKeyboardVisible = isKeyboardVisible,
             onInputFocusChange = onInputFocusChange,
             modifier = Modifier.padding(padding),

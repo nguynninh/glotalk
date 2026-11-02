@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.8] - 2026-11-02
+
+### Added
+
+- Optional OpenAI Realtime audio translation with a separately encrypted personal
+  API key and mutually exclusive online audio provider settings.
+- Voice input for text translation and a saved setting to show or hide the bubble.
+
+### Changed
+
+- Refresh the home dashboard, settings groups and text translation controls.
+- Finish the current offline translation and speech, then process only the latest
+  waiting clip to prevent an accumulating backlog on slow devices.
+- Update translations and regression coverage for audio providers, settings,
+  bubble visibility and voice input.
+
 ## [1.0.7] - 2026-10-30
 
 ### Changed

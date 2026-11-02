@@ -38,6 +38,7 @@ import vn.onplay.vdubbing.framework.locale.AppLocaleController
  */
 class AccessibilityOverlayRenderer(
     private val service: AccessibilityService,
+    private val isBubbleEnabled: () -> Boolean = { true },
 ) : OverlayRenderer {
 
     private val windowManager =
@@ -72,6 +73,7 @@ class AccessibilityOverlayRenderer(
     /** Kept across service restarts so the bubble does not jump back to its start spot. */
     private var bubblePosition: Pair<Int, Int>? = null
     private var bubbleText: TextView? = null
+    private var bubbleLogo: View? = null
     private var bubbleRing: ProgressRingView? = null
     /** True between "Bắt đầu dịch" and the result: the bubble shows it. */
     private var bubbleBusy = false
@@ -246,6 +248,7 @@ class AccessibilityOverlayRenderer(
     // =======================================================================
 
     override fun showBubble(onTranslate: () -> Unit) {
+        if (!isBubbleEnabled()) return
         onTranslateTap = onTranslate
         if (bubble != null) {
             setBubbleMode(bubbleMode)
@@ -262,8 +265,11 @@ class AccessibilityOverlayRenderer(
             // Context: without this the bubble is a floating glyph with no meaning.
             contentDescription = bubbleDescription()
         }
+        val logo = ui.bubbleAvatar(size)
+        view.addView(logo, FrameLayout.LayoutParams(size, size))
+        bubbleLogo = logo
         val glyph = ui.text(
-            OverlayUi.BUBBLE_TEXT,
+            "✕",
             15f,
             Color.WHITE,
             bold = true,
@@ -329,6 +335,7 @@ class AccessibilityOverlayRenderer(
         bubble = null
         bubbleParams = null
         bubbleText = null
+        bubbleLogo = null
         onTranslateTap = null
     }
 
@@ -346,18 +353,12 @@ class AccessibilityOverlayRenderer(
         val view = bubble ?: return
         val isDismiss = bubbleMode == BubbleMode.DISMISS
 
-        // Busy wins over both states: a ring around a faded "TA" reads as "still
-        // working", whereas a red ✕ beside a ring would offer to cancel a
-        // translation that is already running.
         bubbleRing?.visibility = if (bubbleBusy) View.VISIBLE else View.GONE
-        bubbleText?.apply {
-            text = when {
-                bubbleBusy -> OverlayUi.BUBBLE_TEXT
-                isDismiss -> "✕"
-                else -> OverlayUi.BUBBLE_TEXT
-            }
-            alpha = if (bubbleBusy) BUSY_TEXT_ALPHA else 1f
+        bubbleLogo?.apply {
+            visibility = if (isDismiss && !bubbleBusy) View.GONE else View.VISIBLE
+            alpha = if (bubbleBusy) BUSY_LOGO_ALPHA else 1f
         }
+        bubbleText?.visibility = if (isDismiss && !bubbleBusy) View.VISIBLE else View.GONE
         view.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(if (isDismiss && !bubbleBusy) Overlay.DANGER else Overlay.BLUE)
@@ -626,7 +627,7 @@ class AccessibilityOverlayRenderer(
         const val BUBBLE_START_TOP_DP = 132f
         const val LONG_PRESS_MS = 500L
         const val TAG = "VDubbingOverlay"
-        const val BUSY_TEXT_ALPHA = 0.35f
+        const val BUSY_LOGO_ALPHA = 0.35f
 
         const val OUTLINE_WIDTH_DP = 1.1f
         const val MIN_TEXT_SIZE_SP = 10f

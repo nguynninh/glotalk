@@ -20,6 +20,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -50,12 +52,25 @@ internal fun HomeContent(
 ) {
     val colors = MaterialTheme.colorScheme
     val selectedIconColor = if (colors.surface.luminance() < 0.5f) {
-        Color(0xFFD4FF00)
+        Color(0xFFA9A2FF)
     } else {
-        Color(0xFF526600)
+        Color(0xFF6155F5)
+    }
+    var voiceRequest by rememberSaveable { mutableStateOf(0) }
+    var showFlashcards by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showHistory || showFlashcards || selectedTab != 0) {
+        when {
+            showHistory -> onCloseHistory()
+            showFlashcards -> showFlashcards = false
+            else -> onSelectTab(0)
+        }
     }
     val tabState = rememberSaveableStateHolder()
     var inputFocused by remember(selectedTab, showHistory) { mutableStateOf(false) }
+    if (showFlashcards) {
+        TranslationHistoryUI(onBack = { showFlashcards = false }, modifier = modifier, startReviewing = true)
+        return
+    }
     if (showHistory) {
         TranslationHistoryUI(onBack = onCloseHistory, modifier = modifier)
         return
@@ -71,9 +86,18 @@ internal fun HomeContent(
         content = { bottomInset ->
             tabState.SaveableStateProvider(selectedTab) {
                 when (selectedTab) {
-                    0 -> screenTranslation(bottomInset)
+                    0 -> HomeDashboard(
+                        bottomInset = bottomInset,
+                        onSettings = { onSelectTab(2) },
+                        onText = { onSelectTab(1) },
+                        onHistory = onOpenHistory,
+                        onVoice = { voiceRequest++; onSelectTab(1) },
+                        onFlashcards = { showFlashcards = true },
+                    )
+                    2 -> screenTranslation(bottomInset)
                     1 -> TextTranslationUI(
                         onHistory = onOpenHistory, bottomInset = bottomInset,
+                        voiceRequest = voiceRequest,
                         isKeyboardVisible = keyboardVisible,
                         onInputFocusChange = { inputFocused = it },
                     )
@@ -87,14 +111,14 @@ internal fun HomeContent(
                 tonalElevation = 0.dp,
                 windowInsets = WindowInsets(0, 0, 0, 0),
             ) {
-                listOf(R.string.home_screen_tab, R.string.home_text_tab).forEachIndexed { index, title ->
+                listOf(R.string.home_dashboard_tab, R.string.home_translate_tab, R.string.home_settings_tab).forEachIndexed { index, title ->
                     NavigationBarItem(
                         selected = selectedTab == index,
                         onClick = { onSelectTab(index) },
                         icon = {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    painterResource(if (index == 0) R.drawable.ic_nav_screen else R.drawable.ic_nav_text),
+                                    painterResource(listOf(R.drawable.ic_home, R.drawable.ic_overlay_translate, R.drawable.ic_overlay_settings)[index]),
                                     contentDescription = null,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -102,7 +126,7 @@ internal fun HomeContent(
                                     stringResource(title),
                                     fontSize = 10.sp,
                                     lineHeight = 12.sp,
-                                    color = if (selectedTab == index) colors.onSurface else colors.onSurfaceVariant,
+                                    color = if (selectedTab == index) selectedIconColor else colors.onSurfaceVariant,
                                 )
                             }
                         },

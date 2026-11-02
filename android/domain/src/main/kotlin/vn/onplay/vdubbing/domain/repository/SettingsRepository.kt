@@ -6,11 +6,14 @@ import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.ThemeMode
 
 interface SettingsRepository {
+    var openAiRealtimeKey: String
+    var openAiRealtimeAudioEnabled: Boolean
     var geminiLiveKey: String
     var geminiLiveAudioEnabled: Boolean
     var geminiKey: String
     var cloudFallbackEnabled: Boolean
     var targetLanguage: Language
+    var bubbleEnabled: Boolean
     var autoTranslate: Boolean
     var themeMode: ThemeMode
     var appLanguage: AppLanguage

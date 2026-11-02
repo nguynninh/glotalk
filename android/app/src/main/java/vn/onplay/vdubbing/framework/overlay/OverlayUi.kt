@@ -115,22 +115,16 @@ internal class OverlayUi(
         }
     }
 
-    /** The blue "TA" disc, shared by the bubble and the menu header. */
-    fun bubbleAvatar(textSizeSp: Float, diameter: Int): FrameLayout =
+    fun bubbleAvatar(diameter: Int): FrameLayout =
         FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Overlay.BLUE)
-            }
+            background = rounded(Color.WHITE, diameter / density / 2f)
+            clipToOutline = true
             minimumWidth = diameter
             minimumHeight = diameter
             addView(
-                TextView(context).apply {
-                    text = BUBBLE_TEXT
-                    textSize = textSizeSp
-                    typeface = Overlay.bold
-                    setTextColor(Color.WHITE)
-                    gravity = Gravity.CENTER
+                ImageView(context).apply {
+                    setImageResource(R.mipmap.ic_launcher_round)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
                 },
                 FrameLayout.LayoutParams(diameter, diameter),
             )
@@ -176,8 +170,6 @@ internal class OverlayUi(
     }
 
     companion object {
-        const val BUBBLE_TEXT = "TA"
-
         /**
          * Short badge for a language, e.g. "EN" or "VI". Flags would be nicer
          * but several OEM fonts ship no flag glyphs, so the badge is text that

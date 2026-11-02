@@ -37,12 +37,28 @@ class HomeScreenTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<ComposeTestActivity>()
     private fun label(id: Int) = InstrumentationRegistry.getInstrumentation().targetContext.getString(id)
 
+    @Test fun dashboardOpensSettingsAndHistory() {
+        compose.setContent {
+            VDubbingTheme { HomeUI() { Text("Screen settings") } }
+        }
+        compose.onNodeWithText("Screen settings").assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.home_hero_title)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.home_screen_tab)).performClick()
+        compose.onNodeWithText("Screen settings").assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.home_dashboard_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_history_title)).performClick()
+        compose.onNodeWithText(label(R.string.history_empty)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.text_back)).performClick()
+        compose.onNodeWithText(label(R.string.home_hero_title)).assertIsDisplayed()
+    }
+
     @Test fun textAndLanguageSelectionSurviveTabChanges() {
         compose.setContent {
             VDubbingTheme { HomeUI() { Text("Screen settings") } }
         }
+        compose.onNodeWithText(label(R.string.home_settings_tab)).performClick()
         compose.onNodeWithText("Screen settings").assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.home_text_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_translate_tab)).performClick()
         compose.onNodeWithContentDescription(label(R.string.text_keyboard)).performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasContentDescription(label(R.string.text_back)))
@@ -51,16 +67,16 @@ class HomeScreenTest {
         compose.onNodeWithText(label(R.string.text_input_hint)).performTextInput("Hello")
         compose.onNodeWithContentDescription(label(R.string.text_back)).performClick()
         compose.waitUntil(5_000) {
-            compose.onAllNodes(androidx.compose.ui.test.hasText(label(R.string.home_screen_tab)))
+            compose.onAllNodes(androidx.compose.ui.test.hasText(label(R.string.home_settings_tab)))
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription(label(R.string.panel_swap_languages)).performClick()
         compose.onNode(hasText(label(R.string.text_language_vietnamese)) and hasClickAction()).performClick()
         compose.onNodeWithText(label(R.string.text_language_english_full)).performClick()
         compose.onNodeWithText(label(R.string.dialog_done_title)).performClick()
-        compose.onNodeWithText(label(R.string.home_screen_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_settings_tab)).performClick()
         compose.onNodeWithText("Screen settings").assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.home_text_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_translate_tab)).performClick()
         compose.onNodeWithText("Hello").assertTextEquals("Hello")
         compose.onAllNodes(androidx.compose.ui.test.hasText("English"))[0].assertIsDisplayed()
         compose.onAllNodes(androidx.compose.ui.test.hasText(label(R.string.text_language_chinese)))[0].assertIsDisplayed()
@@ -70,19 +86,19 @@ class HomeScreenTest {
         compose.setContent {
             VDubbingTheme { HomeUI() { Text("Screen settings") } }
         }
-        compose.onNodeWithText(label(R.string.home_text_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_translate_tab)).performClick()
         compose.onNodeWithContentDescription(label(R.string.text_keyboard)).performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodes(androidx.compose.ui.test.hasContentDescription(label(R.string.text_back)))
                 .fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText(label(R.string.home_screen_tab)).assertDoesNotExist()
+        compose.onNodeWithText(label(R.string.home_settings_tab)).assertDoesNotExist()
         compose.onNodeWithContentDescription(label(R.string.text_language_chinese_full)).assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.text_language_vietnamese_full)).assertIsDisplayed()
         compose.onNodeWithText(label(R.string.text_input_hint)).performTextInput("Hello")
         compose.onNodeWithContentDescription(label(R.string.text_back)).performClick()
         compose.waitUntil(5_000) {
-            compose.onAllNodes(androidx.compose.ui.test.hasText(label(R.string.home_screen_tab)))
+            compose.onAllNodes(androidx.compose.ui.test.hasText(label(R.string.home_settings_tab)))
                 .fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithText("Hello").assertTextEquals("Hello")
@@ -94,7 +110,7 @@ class HomeScreenTest {
         compose.setContent {
             VDubbingTheme { HomeUI() { Text("Screen settings") } }
         }
-        compose.onNodeWithText(label(R.string.home_text_tab)).performClick()
+        compose.onNodeWithText(label(R.string.home_translate_tab)).performClick()
         compose.onNodeWithContentDescription(label(R.string.text_history)).performClick()
         compose.onNodeWithText(label(R.string.history_empty)).assertIsDisplayed()
         compose.onNodeWithContentDescription(label(R.string.text_back)).performClick()

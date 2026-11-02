@@ -23,6 +23,8 @@ import vn.onplay.vdubbing.domain.repository.SettingsRepository
 class TranslationBinderTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val settings = object : SettingsRepository {
+        override var openAiRealtimeKey = ""
+        override var openAiRealtimeAudioEnabled = false
         override var geminiLiveKey = ""
             override var geminiLiveAudioEnabled = false
             override var geminiKey = ""
@@ -30,6 +32,7 @@ class TranslationBinderTest {
         override var sourceLanguage = Language.ENGLISH
         override var targetLanguage = Language.VIETNAMESE
         override var displayMode = DisplayMode.REPLACE
+        override var bubbleEnabled = true
         override var autoTranslate = false
         override var themeMode = ThemeMode.SYSTEM
         override var appLanguage = AppLanguage.SYSTEM

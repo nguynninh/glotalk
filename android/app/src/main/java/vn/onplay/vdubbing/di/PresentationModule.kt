@@ -70,6 +70,7 @@ object PresentationModule {
         override fun stopAudioTranslation() = vn.onplay.vdubbing.framework.audio.AudioTranslationService.stop(context)
         override fun stop() = TranslateService.stop(context)
         override fun hideOverlay() { AccessibilityBridge.service?.overlayRenderer?.hide() }
+        override fun hideBubble() { AccessibilityBridge.service?.overlayRenderer?.hideBubble() }
         override fun showBubble(onTranslate: () -> Unit) {
             AccessibilityBridge.service?.overlayRenderer?.showBubble(onTranslate)
         }

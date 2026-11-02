@@ -56,6 +56,8 @@ class SettingsViewModel @Inject constructor(
         _state.update {
             it.copy(
                 savedKey = settings.geminiKey,
+                openAiRealtimeKey = settings.openAiRealtimeKey,
+                openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = settings.geminiLiveKey,
                 geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
                 cloudEnabled = settings.cloudFallbackEnabled,
@@ -63,6 +65,7 @@ class SettingsViewModel @Inject constructor(
                 targetLanguage = settings.targetLanguage,
                 displayMode = settings.displayMode,
                 autoTranslate = settings.autoTranslate,
+                bubbleEnabled = settings.bubbleEnabled,
                 themeMode = settings.themeMode,
                 appLanguage = settings.appLanguage,
             )
@@ -89,9 +92,12 @@ class SettingsViewModel @Inject constructor(
                 targetLanguage = settings.targetLanguage,
                 displayMode = settings.displayMode,
                 autoTranslate = settings.autoTranslate,
+                bubbleEnabled = settings.bubbleEnabled,
                 themeMode = settings.themeMode,
                 cloudEnabled = settings.cloudFallbackEnabled,
                 savedKey = settings.geminiKey,
+                openAiRealtimeKey = settings.openAiRealtimeKey,
+                openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = settings.geminiLiveKey,
                 geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
                 accessibilitySnapshot = snapshot,
@@ -217,17 +223,44 @@ class SettingsViewModel @Inject constructor(
             return
         }
         try {
-            val changed = settings.geminiLiveKey != trimmed || settings.geminiLiveAudioEnabled != enabled
+            val changed = settings.geminiLiveKey != trimmed || settings.geminiLiveAudioEnabled != enabled ||
+                (enabled && settings.openAiRealtimeAudioEnabled)
             settings.geminiLiveKey = trimmed
+            if (enabled) settings.openAiRealtimeAudioEnabled = false
             settings.geminiLiveAudioEnabled = enabled
             if (changed) services.stopAudioTranslation()
             _state.update { it.copy(
+                openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = trimmed,
                 geminiLiveAudioEnabled = enabled,
                 message = UiMessage(UiContent.Text(R.string.gemini_live_saved)),
             ) }
         } catch (_: Exception) {
             _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.gemini_live_save_failed), isError = true)) }
+        }
+    }
+
+    fun onSaveOpenAiRealtime(key: String, enabled: Boolean) {
+        val trimmed = key.trim()
+        if ((enabled && trimmed.isEmpty()) || trimmed.length > 512 || trimmed.any { it.code !in 33..126 }) {
+            _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.openai_realtime_key_required), isError = true)) }
+            return
+        }
+        try {
+            val changed = settings.openAiRealtimeKey != trimmed || settings.openAiRealtimeAudioEnabled != enabled ||
+                (enabled && settings.geminiLiveAudioEnabled)
+            settings.openAiRealtimeKey = trimmed
+            if (enabled) settings.geminiLiveAudioEnabled = false
+            settings.openAiRealtimeAudioEnabled = enabled
+            if (changed) services.stopAudioTranslation()
+            _state.update { it.copy(
+                geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
+                openAiRealtimeKey = trimmed,
+                openAiRealtimeAudioEnabled = enabled,
+                message = UiMessage(UiContent.Text(R.string.openai_realtime_saved)),
+            ) }
+        } catch (_: Exception) {
+            _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.openai_realtime_save_failed), isError = true)) }
         }
     }
 
@@ -263,8 +296,14 @@ class SettingsViewModel @Inject constructor(
         services.hideOverlay()
     }
 
-    /** Bring back the floating bubble on the current service instance. */
+    fun onBubbleEnabledChange(enabled: Boolean) {
+        settings.bubbleEnabled = enabled
+        _state.update { it.copy(bubbleEnabled = enabled) }
+        if (enabled) onShowBubble() else services.hideBubble()
+    }
+
     fun onShowBubble() {
+        if (!settings.bubbleEnabled) return
         services.showBubble {
             onTranslateNow()
         }
@@ -281,6 +320,7 @@ class SettingsViewModel @Inject constructor(
                     it.copy(
                         serviceRunning = background.running,
                         autoTranslate = settings.autoTranslate,
+                        bubbleEnabled = settings.bubbleEnabled,
                         // Same rule as refreshSystemState(): the system setting is
                         // authoritative, the live object only says "ready right now".
                         accessibilityReady = accessibility.isEnabledInSystemSettings() ||

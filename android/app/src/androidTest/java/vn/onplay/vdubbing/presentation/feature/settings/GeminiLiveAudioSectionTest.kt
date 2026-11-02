@@ -11,6 +11,7 @@ import org.junit.Rule
 import org.junit.Test
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.presentation.designsystem.theme.VDubbingTheme
+import vn.onplay.vdubbing.presentation.feature.settings.components.OpenAiRealtimeAudioSection
 import vn.onplay.vdubbing.presentation.feature.settings.components.GeminiLiveAudioSection
 
 class GeminiLiveAudioSectionTest {
@@ -27,5 +28,17 @@ class GeminiLiveAudioSectionTest {
         compose.runOnIdle { assertNull(saved) }
         compose.onNodeWithText(context.getString(R.string.action_save)).performClick()
         compose.runOnIdle { assertEquals("AIza-test-personal" to true, saved) }
+    }
+    @Test fun openAiRequiresExplicitSave() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        var saved: Pair<String, Boolean>? = null
+        compose.setContent {
+            VDubbingTheme { OpenAiRealtimeAudioSection(SettingsUiState()) { key, enabled -> saved = key to enabled } }
+        }
+        compose.onNodeWithText(context.getString(R.string.openai_realtime_key_label)).performTextInput("sk-test-personal")
+        compose.onNode(isToggleable()).performClick()
+        compose.runOnIdle { assertNull(saved) }
+        compose.onNodeWithText(context.getString(R.string.action_save)).performClick()
+        compose.runOnIdle { assertEquals("sk-test-personal" to true, saved) }
     }
 }

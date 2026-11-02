@@ -13,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import vn.onplay.vdubbing.presentation.designsystem.theme.VDubbingTheme
@@ -32,7 +34,7 @@ internal fun HomeBlurLayout(
             Box(
                 Modifier.align(Alignment.BottomCenter)
                     .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                    .background(colors.surfaceContainer),
+                    .background(if (colors.surface.luminance() < 0.5f) colors.surfaceContainer else Color(0xFFF9F8FF)),
             ) { navigation() }
         }
     }

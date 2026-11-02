@@ -26,10 +26,13 @@ data class SettingsUiState(
      * is toggling it off and on, which the UI has to say out loud.
      */
     val accessibilityNeedsRebind: Boolean = false,
+    val bubbleEnabled: Boolean = true,
     val serviceRunning: Boolean = false,
     val notificationsGranted: Boolean = false,
     val cloudEnabled: Boolean = false,
     val savedKey: String = "",
+    val openAiRealtimeKey: String = "",
+    val openAiRealtimeAudioEnabled: Boolean = false,
     val geminiLiveKey: String = "",
     val geminiLiveAudioEnabled: Boolean = false,
     /** What the screen is assumed to be in; AUTO asks the translator to detect it. */

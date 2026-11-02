@@ -114,8 +114,62 @@ class SettingsViewModelTest {
         assertTrue(model.state.value.message!!.isError)
     }
 
+    @Test
+    fun `bubble defaults on and disabling prevents showing until enabled again`() = runTest(dispatcher) {
+        val fixture = Fixture()
+        val model = fixture.model()
+        assertTrue(model.state.value.bubbleEnabled)
+        model.onBubbleEnabledChange(false)
+        assertFalse(fixture.settings.bubbleEnabled)
+        assertFalse(model.state.value.bubbleEnabled)
+        assertEquals(1, fixture.bubbleHides)
+        model.onShowBubble()
+        assertEquals(0, fixture.bubbleShows)
+        model.refreshSystemState()
+        assertFalse(model.state.value.bubbleEnabled)
+        model.onBubbleEnabledChange(true)
+        assertTrue(fixture.settings.bubbleEnabled)
+        assertTrue(model.state.value.bubbleEnabled)
+        assertEquals(1, fixture.bubbleShows)
+    }
+
+    @Test
+    fun `OpenAI requires valid key and switches providers without reusing credentials`() = runTest(dispatcher) {
+        val fixture = Fixture()
+        val model = fixture.model()
+        for (key in listOf("", "sk-test\nInjected: header", "x".repeat(513))) {
+            model.onSaveOpenAiRealtime(key, true)
+            assertTrue(model.state.value.message!!.isError)
+            assertFalse(fixture.settings.openAiRealtimeAudioEnabled)
+            assertEquals(0, fixture.audioStops)
+        }
+        model.onSaveGeminiLive("gemini-key", true)
+        model.onSaveOpenAiRealtime("  sk-personal-test  ", true)
+        assertEquals("sk-personal-test", fixture.settings.openAiRealtimeKey)
+        assertTrue(fixture.settings.openAiRealtimeAudioEnabled)
+        assertFalse(fixture.settings.geminiLiveAudioEnabled)
+        assertFalse(model.state.value.geminiLiveAudioEnabled)
+        assertEquals("gemini-key", fixture.settings.geminiLiveKey)
+        assertEquals("", fixture.settings.geminiKey)
+        assertEquals(2, fixture.audioStops)
+        model.onSaveOpenAiRealtime("sk-personal-test", true)
+        assertEquals(2, fixture.audioStops)
+        model.refreshSystemState()
+        assertEquals("sk-personal-test", model.state.value.openAiRealtimeKey)
+        assertTrue(model.state.value.openAiRealtimeAudioEnabled)
+        model.onSaveGeminiLive("gemini-key", true)
+        assertFalse(fixture.settings.openAiRealtimeAudioEnabled)
+        assertFalse(model.state.value.openAiRealtimeAudioEnabled)
+        assertTrue(fixture.settings.geminiLiveAudioEnabled)
+        model.onSaveOpenAiRealtime("", false)
+        assertEquals("", fixture.settings.openAiRealtimeKey)
+        assertTrue(fixture.settings.geminiLiveAudioEnabled)
+    }
+
     private class Fixture {
         val settings = object : SettingsRepository {
+            override var openAiRealtimeKey = ""
+            override var openAiRealtimeAudioEnabled = false
             override var geminiLiveKey = ""
             override var geminiLiveAudioEnabled = false
             override var geminiKey = ""
@@ -123,7 +177,8 @@ class SettingsViewModelTest {
             override var sourceLanguage = Language.AUTO
             override var targetLanguage = Language.VIETNAMESE
             override var displayMode = DisplayMode.REPLACE
-            override var autoTranslate = false
+            override var bubbleEnabled = true
+        override var autoTranslate = false
             override var themeMode = ThemeMode.SYSTEM
             override var appLanguage = AppLanguage.SYSTEM
         }
@@ -131,6 +186,8 @@ class SettingsViewModelTest {
         val background = object : BackgroundStatusRepository {
             override val state = backgroundState
         }
+        var bubbleShows = 0
+        var bubbleHides = 0
         var audioStops = 0
         var autoUpdates = 0
         var translatedPair: Pair<Language, Language>? = null
@@ -165,7 +222,8 @@ class SettingsViewModelTest {
             override fun stopAudioTranslation() { audioStops++ }
             override fun stop() = Unit
             override fun hideOverlay() = Unit
-            override fun showBubble(onTranslate: () -> Unit) = Unit
+            override fun hideBubble() { bubbleHides++ }
+            override fun showBubble(onTranslate: () -> Unit) { bubbleShows++ }
             override fun setDisplayMode(mode: DisplayMode) = Unit
             override fun applyAutoTranslate() { autoUpdates++ }
         }
