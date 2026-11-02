@@ -50,7 +50,12 @@ public class AudioSourceTestActivity extends Activity {
             .setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_ALL).build());
         try (AssetFileDescriptor file = getAssets().openFd("whisper-jfk.wav")) {
             player.setDataSource(file.getFileDescriptor(), file.getStartOffset(), file.getLength());
-            player.setLooping(true);
+            boolean audit = getIntent().getBooleanExtra("onplayAudit", false);
+            player.setLooping(!audit);
+            if (audit) player.setOnCompletionListener(done ->
+                new android.os.Handler(getMainLooper()).postDelayed(() -> {
+                    if (!isFinishing() && player != null) { player.seekTo(0); player.start(); }
+                }, 2000));
             player.prepare();
             player.start();
         } catch (IOException error) {

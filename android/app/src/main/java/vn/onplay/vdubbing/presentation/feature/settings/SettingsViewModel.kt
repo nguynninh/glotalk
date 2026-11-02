@@ -60,6 +60,7 @@ class SettingsViewModel @Inject constructor(
                 openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = settings.geminiLiveKey,
                 geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
+                onPlayAudioEnabled = settings.onPlayAudioEnabled,
                 cloudEnabled = settings.cloudFallbackEnabled,
                 sourceLanguage = settings.sourceLanguage,
                 targetLanguage = settings.targetLanguage,
@@ -100,6 +101,7 @@ class SettingsViewModel @Inject constructor(
                 openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = settings.geminiLiveKey,
                 geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
+                onPlayAudioEnabled = settings.onPlayAudioEnabled,
                 accessibilitySnapshot = snapshot,
             )
         }
@@ -224,15 +226,19 @@ class SettingsViewModel @Inject constructor(
         }
         try {
             val changed = settings.geminiLiveKey != trimmed || settings.geminiLiveAudioEnabled != enabled ||
-                (enabled && settings.openAiRealtimeAudioEnabled)
+                (enabled && (settings.openAiRealtimeAudioEnabled || settings.onPlayAudioEnabled))
             settings.geminiLiveKey = trimmed
-            if (enabled) settings.openAiRealtimeAudioEnabled = false
+            if (enabled) {
+                settings.openAiRealtimeAudioEnabled = false
+                settings.onPlayAudioEnabled = false
+            }
             settings.geminiLiveAudioEnabled = enabled
             if (changed) services.stopAudioTranslation()
             _state.update { it.copy(
                 openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
                 geminiLiveKey = trimmed,
                 geminiLiveAudioEnabled = enabled,
+                onPlayAudioEnabled = settings.onPlayAudioEnabled,
                 message = UiMessage(UiContent.Text(R.string.gemini_live_saved)),
             ) }
         } catch (_: Exception) {
@@ -248,19 +254,40 @@ class SettingsViewModel @Inject constructor(
         }
         try {
             val changed = settings.openAiRealtimeKey != trimmed || settings.openAiRealtimeAudioEnabled != enabled ||
-                (enabled && settings.geminiLiveAudioEnabled)
+                (enabled && (settings.geminiLiveAudioEnabled || settings.onPlayAudioEnabled))
             settings.openAiRealtimeKey = trimmed
-            if (enabled) settings.geminiLiveAudioEnabled = false
+            if (enabled) {
+                settings.geminiLiveAudioEnabled = false
+                settings.onPlayAudioEnabled = false
+            }
             settings.openAiRealtimeAudioEnabled = enabled
             if (changed) services.stopAudioTranslation()
             _state.update { it.copy(
                 geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
+                onPlayAudioEnabled = settings.onPlayAudioEnabled,
                 openAiRealtimeKey = trimmed,
                 openAiRealtimeAudioEnabled = enabled,
                 message = UiMessage(UiContent.Text(R.string.openai_realtime_saved)),
             ) }
         } catch (_: Exception) {
             _state.update { it.copy(message = UiMessage(UiContent.Text(R.string.openai_realtime_save_failed), isError = true)) }
+        }
+    }
+
+    fun onOnPlayAudioChange(enabled: Boolean) {
+        if (settings.onPlayAudioEnabled == enabled) return
+        if (enabled) {
+            settings.geminiLiveAudioEnabled = false
+            settings.openAiRealtimeAudioEnabled = false
+        }
+        settings.onPlayAudioEnabled = enabled
+        services.stopAudioTranslation()
+        _state.update {
+            it.copy(
+                onPlayAudioEnabled = enabled,
+                geminiLiveAudioEnabled = settings.geminiLiveAudioEnabled,
+                openAiRealtimeAudioEnabled = settings.openAiRealtimeAudioEnabled,
+            )
         }
     }
 

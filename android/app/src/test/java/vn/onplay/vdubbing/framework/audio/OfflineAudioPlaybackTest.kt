@@ -6,7 +6,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -15,18 +14,16 @@ import vn.onplay.vdubbing.domain.model.AudioTranslation
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class OfflineAudioPlaybackTest {
-    @Test fun `slow recognition finishes and speaks before processing the latest waiting clip`() = runTest {
+    @Test fun `recognition continues during playback and every sentence is spoken in order`() = runTest {
         val clips = Channel<ByteArray>(Channel.UNLIMITED)
-        val recognition = CompletableDeferred<Unit>()
         val speech = CompletableDeferred<Unit>()
         val translated = mutableListOf<Int>()
         val spoken = mutableListOf<String>()
         val stages = mutableListOf<AudioStage>()
         val job = launch {
-            playOfflineAudio(clips.receiveAsFlow(), translate = { clip ->
-                val id = clip[0].toInt()
+            playOfflineAudio(clips.receiveAsFlow(), translate = {
+                val id = it[0].toInt()
                 translated += id
-                if (id == 1) recognition.await()
                 AudioTranslation("source $id", "translated $id")
             }, speak = {
                 spoken += it
@@ -35,21 +32,52 @@ class OfflineAudioPlaybackTest {
         }
         clips.send(byteArrayOf(1))
         runCurrent()
-        repeat(20) { clips.send(byteArrayOf((it + 2).toByte())) }
+        clips.send(byteArrayOf(2))
+        clips.send(byteArrayOf(3))
         runCurrent()
-        advanceTimeBy(45000)
-        recognition.complete(Unit)
-        runCurrent()
+        assertEquals(listOf(1, 2, 3), translated)
         assertEquals(listOf("translated 1"), spoken)
-        assertEquals(listOf(1), translated)
-        repeat(20) { clips.send(byteArrayOf((it + 22).toByte())) }
-        runCurrent()
+        assertEquals(AudioStage.SPEAKING, stages.last())
         speech.complete(Unit)
         clips.close()
         job.join()
-        assertEquals(listOf(1, 41), translated)
-        assertEquals(listOf("translated 1", "translated 41"), spoken)
+        assertEquals(listOf("translated 1", "translated 2", "translated 3"), spoken)
         assertEquals(AudioStage.LISTENING, stages.last())
+    }
+
+    @Test fun `waiting sentences are preserved through model preparation`() = runTest {
+        var now = 0L
+        val clips = Channel<ByteArray>(Channel.UNLIMITED)
+        val finish = CompletableDeferred<Unit>()
+        val translated = mutableListOf<Int>()
+        val job = launch {
+            playOfflineAudio(clips.receiveAsFlow(), translate = {
+                translated += it[0].toInt()
+                if (it[0].toInt() == 1) finish.await()
+                AudioTranslation("source", "translated")
+            }, speak = {}, onStage = {}, nowMillis = { now })
+        }
+        clips.send(byteArrayOf(1))
+        runCurrent()
+        clips.send(byteArrayOf(2))
+        runCurrent()
+        now = 20000
+        finish.complete(Unit)
+        clips.close()
+        job.join()
+        assertEquals(listOf(1, 2), translated)
+    }
+
+    @Test fun `overload stops explicitly instead of dropping dialogue`() = runTest {
+        var captureStopped = false
+        try {
+            playOfflineAudio(flow {
+                try { repeat(10) { emit(byteArrayOf(it.toByte())) } }
+                finally { captureStopped = true }
+            }, translate = { awaitCancellation() }, speak = {}, onStage = {})
+            fail("must report overload")
+        } catch (_: OfflineAudioBacklogException) { }
+        assertTrue(captureStopped)
     }
 
     @Test fun `stopping during recognition cancels capture and never speaks stale audio`() = runTest {

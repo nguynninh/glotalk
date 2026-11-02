@@ -22,6 +22,17 @@ class BubbleSettingsTest {
         }
         try {
             val settings = SettingsRepositoryImpl(context)
+            assertFalse(settings.onPlayAudioEnabled)
+            settings.geminiLiveAudioEnabled = true
+            settings.onPlayAudioEnabled = true
+            assertTrue(SettingsRepositoryImpl(context).onPlayAudioEnabled)
+            assertFalse(settings.geminiLiveAudioEnabled)
+            assertFalse(settings.openAiRealtimeAudioEnabled)
+            settings.openAiRealtimeAudioEnabled = true
+            assertFalse(settings.onPlayAudioEnabled)
+            settings.onPlayAudioEnabled = true
+            settings.geminiLiveAudioEnabled = true
+            assertFalse(settings.onPlayAudioEnabled)
             assertTrue(settings.bubbleEnabled)
             settings.bubbleEnabled = false
             assertFalse(SettingsRepositoryImpl(context).bubbleEnabled)

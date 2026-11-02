@@ -36,6 +36,7 @@ fun SettingsUI(
         onAppLanguageChange = viewModel::onAppLanguageChange,
         onSaveGeminiLive = viewModel::onSaveGeminiLive,
         onSaveOpenAiRealtime = viewModel::onSaveOpenAiRealtime,
+        onOnPlayAudioChange = viewModel::onOnPlayAudioChange,
         onSaveCloud = viewModel::onSaveCloud,
         onVerifyKey = viewModel::onVerifyKey,
         onDismissMessage = viewModel::consumeMessage,
@@ -55,7 +56,7 @@ internal fun SettingsUIPreview(bottomInset: Dp = 0.dp) {
             onBubbleEnabledChange = {},
             onSourceLanguageChange = {}, onTargetLanguageChange = {},
             onDisplayModeChange = {}, onThemeModeChange = {}, onAppLanguageChange = {},
-            onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> }, onSaveCloud = { _, _ -> },
+            onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> }, onOnPlayAudioChange = {}, onSaveCloud = { _, _ -> },
             onVerifyKey = {}, onDismissMessage = {},
         )
     }

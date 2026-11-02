@@ -65,6 +65,7 @@ internal fun SettingsContent(
     onAppLanguageChange: (AppLanguage) -> Unit,
     onSaveGeminiLive: (String, Boolean) -> Unit,
     onSaveOpenAiRealtime: (String, Boolean) -> Unit,
+    onOnPlayAudioChange: (Boolean) -> Unit,
     onSaveCloud: (String, Boolean) -> Unit,
     onVerifyKey: (String) -> Unit,
     onDismissMessage: () -> Unit,
@@ -186,6 +187,7 @@ internal fun SettingsContent(
                 )
 
                 GeminiLiveAudioSection(state, onSaveGeminiLive)
+                OnPlayAudioSection(state.onPlayAudioEnabled, onOnPlayAudioChange)
                 OpenAiRealtimeAudioSection(state, onSaveOpenAiRealtime)
 
                 CloudSection(state, onSaveCloud, onVerifyKey)
@@ -270,7 +272,7 @@ private fun SettingsContentPreview() {
             onBubbleEnabledChange = {},
             onSourceLanguageChange = {}, onTargetLanguageChange = {},
             onDisplayModeChange = {}, onThemeModeChange = {}, onAppLanguageChange = {},
-            onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> }, onSaveCloud = { _, _ -> },
+            onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> }, onOnPlayAudioChange = {}, onSaveCloud = { _, _ -> },
             onVerifyKey = {}, onDismissMessage = {},
         )
     }

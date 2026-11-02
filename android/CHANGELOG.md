@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.9] - 2026-11-02
+
+### Added
+
+- Optional ONPlay WebSocket audio translation with 100 ms PCM input and ordered
+  playback of complete WAV segments while capture continues.
+- Offline Vietnamese speech with KorvaTTS on ONNX Runtime, verified model
+  downloads, license notices and read-aloud integration.
+- Development audio timing logs and regression coverage for segment speech,
+  cancellation, bounded queues, settings and offline speech.
+
+### Changed
+
+- Run offline capture, recognition/translation and speech as bounded stages,
+  preserving dialogue order and stopping on overload instead of dropping clips.
+- Use Whisper Base Q5_1 for automatic and other source languages; retain Small
+  Q5_1 for explicitly selected Vietnamese sources.
+- Reuse a session-owned ML Kit translator and synthesize upcoming Vietnamese
+  speech chunks while the current chunk plays.
+- Handle ONPlay speech errors without stopping transcription or translation;
+  bound upload and receive backlog and disconnect on cancellation.
+- Update audio settings descriptions and integration documentation. Public WSS
+  deployment and end-to-end latency remain unverified on a connected device.
+
 ## [1.0.8] - 2026-11-02
 
 ### Added

@@ -29,6 +29,18 @@ class GeminiLiveAudioSectionTest {
         compose.onNodeWithText(context.getString(R.string.action_save)).performClick()
         compose.runOnIdle { assertEquals("AIza-test-personal" to true, saved) }
     }
+    @Test fun onPlayRequiresExplicitToggle() {
+        var enabled = false
+        compose.setContent {
+            VDubbingTheme {
+                vn.onplay.vdubbing.presentation.feature.settings.components.OnPlayAudioSection(false) { enabled = it }
+            }
+        }
+        compose.runOnIdle { assertFalse(enabled) }
+        compose.onNode(isToggleable()).performClick()
+        compose.runOnIdle { assertTrue(enabled) }
+    }
+
     @Test fun openAiRequiresExplicitSave() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         var saved: Pair<String, Boolean>? = null

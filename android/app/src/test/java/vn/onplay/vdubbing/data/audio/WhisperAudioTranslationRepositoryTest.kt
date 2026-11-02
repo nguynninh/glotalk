@@ -94,6 +94,20 @@ class WhisperAudioTranslationRepositoryTest {
             Language.VIETNAMESE, listOf(AudioTranslation("你好", "Xin chào"))))
     }
 
+    @Test fun `short ambiguous text does not switch language away from recent speech`() = runTest {
+        val translation = object : TranslationRepository {
+            override suspend fun detect(text: String) =
+                if (text.contains("你好")) Language.CHINESE else Language.JAPANESE
+            override suspend fun translate(lines: List<String>, source: Language, target: Language): List<String> {
+                assertEquals(Language.CHINESE, source)
+                return listOf("Ừ")
+            }
+        }
+        val repository = WhisperAudioTranslationRepository({ _, _, _ -> "嗯" }, translation)
+        assertEquals(AudioTranslation("嗯", "Ừ"), repository.translate(byteArrayOf(), Language.AUTO,
+            Language.VIETNAMESE, listOf(AudioTranslation("你好", "Xin chào"))))
+    }
+
     @Test fun `cancelled recognition cannot start translation after returning a late result`() = runTest {
         val began = CompletableDeferred<Unit>()
         val finish = CompletableDeferred<Unit>()

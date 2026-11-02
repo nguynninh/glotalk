@@ -39,10 +39,10 @@ class AppContainer(context: Context) {
     val settings = SettingsRepositoryImpl(appContext)
     internal val audioSessions = AudioSessionStore()
     internal val whisperModels = WhisperModelStore(appContext)
-    internal fun audioTranslation(whisper: LocalWhisper, vad: File) =
+    internal fun audioTranslation(whisper: LocalWhisper, vad: File, translator: TranslationRepositoryImpl) =
         WhisperAudioTranslationRepository(
             transcribe = { wav, source, prompt -> whisper.transcribe(wav, source, prompt, vad) },
-            translation = translation,
+            translation = translator,
         )
     val history = TranslationHistoryRepositoryImpl(appContext)
     val captureStore = BitmapCaptureStore()

@@ -86,23 +86,72 @@ Usage is billed to your OpenAI API account. Enabling either online provider disa
 the other; saving changed settings stops the current session. No automatic fallback
 or reconnection sends audio to another provider.
 
-With both online providers disabled, the original offline workflow remains available:
+For the experimental ONPlay mode, open Settings → Advanced → **ONPlay Server**
+and enable **Dùng ONPlay Server**. This disables Gemini Live and OpenAI and stops
+any current audio session. Then open the source app, choose the target language
+in the bubble, and enable **Dịch âm thanh**. Only that app's PCM16 mono 16 kHz
+playback is sent in 100 ms binary frames to `wss://stt.qiverse.top/ws`, after
+`ready`. The connection opts into segment speech with `speech: true`; complete
+WAV segments play in order while capture and WebSocket reception continue.
+The selected source language is sent when explicit; Auto uses server detection.
+No local recognition, local speech model, or separate TTS request is used.
+The client sends `Origin: https://stt.qiverse.top`; public hosting must route
+`/ws` to the bridge and configure `ONPLAY_PUBLIC_ORIGIN` accordingly. Origin
+validation is not authentication. Only one server inference session can run,
+shared with HTTP uploads. The HTTP upload contract is unchanged.
+
+Client receive backlog is bounded to 32 events and 46 MiB of JSON characters;
+WAVs are limited to 32 MiB. Upload backlog over two seconds or receive overflow
+stops the session instead of dropping dialogue or reconnecting. `audio_error`
+reports speech failure once while transcription/translation continue; already
+received WAVs remain playable. Restart the session to retry speech. `done`
+drains delivered playback before the session ends; cancellation disconnects and
+stops playback. Turning the mode off restores offline translation when the other
+online modes are also off. Public WSS routing and end-to-end latency need a live
+server/device check.
+
+With all online modes disabled, the original offline workflow remains available:
 
 1. Enable the background bubble, open the app playing speech, choose your
    languages in the bubble, and turn on **Dịch âm thanh**. No API key is needed.
 2. Grant Android's audio recording and playback capture permissions. Glotalk
    captures playback from the selected app, without recording the microphone
    or automatically following other apps.
-3. The first session downloads multilingual Whisper Small Q5_1 and Silero speech
-   detection models (about 191 MB). Downloads are verified with SHA-256 and stored
+3. The first session downloads multilingual Whisper Base Q5_1 and Silero speech
+   detection models (about 61 MB). An explicitly selected Vietnamese source
+   uses Small Q5_1 instead (about 191 MB). Downloads are verified with SHA-256 and stored
    outside Android backups. ML Kit also downloads the selected language models
    on first use. Once these are downloaded, recognition and translation run offline.
-4. Android reads translations using an installed offline voice for the target
-   language. Install the voice through Android text-to-speech settings if needed.
+4. Vietnamese translations use KorvaTTS locally with ONNX Runtime at 8 inference
+   steps. Its first use downloads about 398 MB of verified model and voice assets.
+   Other languages use an installed offline Android voice; install that voice
+   through Android text-to-speech settings if needed.
    Neither captured audio nor transcripts are sent to a translation server.
 5. Turn off the option or choose **Dừng dịch âm thanh** in the notification or
    bubble menu to stop. Changing languages, hiding the bubble, disabling
    accessibility or stopping the background service also stops audio translation.
+
+Development builds log offline audio progress under `GlotalkAudio` (Android Studio
+filter: `tag:GlotalkAudio`, or `adb logcat -s GlotalkAudio:I`). Each captured clip
+has an ID shared by recognition, translation, Korva inference and playback logs.
+`tts_progress` reports inference steps; `pcm_ready` reports generated samples,
+audio duration and synthesis time. `playback_started` and `playback_completed`
+track AudioTrack playback. `backlog_overflow` reports a full queue that stops the session; clips are not
+replaced by newer input. Offline synthesis plays PCM directly;
+`file_saved=false` means no WAV file was written. Logs contain counts, timings
+and language codes, without transcript text or API keys.
+
+Offline auto detection prioritizes speed with Whisper Base; recognition may be
+less accurate than Small, especially for Vietnamese. Continuous capture emits
+clips at speech pauses of 500 ms, with an eight-second maximum (plus up to
+200 ms of pre-roll). Recognition and translation continue while prior speech
+plays, preserving every captured clip in order. If the three-clip input queue
+fills, the session stops with an explicit overload message instead of silently
+discarding dialogue. Audio translation uses its own ML Kit
+client so screen translation cannot block its queue. Prepared language pairs
+are reused; a missing language model still requires a first download. Vietnamese
+speech is split into shorter chunks, and the next chunk is synthesized while
+the current one plays, including across consecutive utterances.
 
 Native recognition uses [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
 The first native build needs network access, Android NDK and CMake; their
@@ -112,12 +161,12 @@ versions and the source archive checksum are pinned in the build configuration.
 
 - Apps can block playback capture. Silence alone cannot distinguish a blocked
   app from paused playback; Glotalk reports that no audio is being received.
-- Offline audio translation processes speech at pauses, with a 5-second maximum chunk.
-  Processing and speech introduce latency. On a slow device it finishes the current
-  translation and speech, then processes the latest waiting clip. Intermediate
-  waiting clips are skipped to bound the backlog; offline mode does not translate
-  every phrase when processing is slower than playback. Performance and accuracy
-  depend on the phone, language and audio; simultaneous dubbing is not guaranteed.
+- Offline audio translation processes speech at pauses, with an eight-second maximum
+  chunk. Recognition/translation and speech run concurrently and preserve the order
+  of captured clips. The bounded pipeline stops with an overload message if it cannot
+  keep up; it does not silently skip waiting dialogue. Processing still introduces
+  latency. Performance and recognition accuracy depend on the phone, language and
+  source audio; simultaneous, complete film dubbing is not guaranteed.
 - Before the streaming optimization, the tested Joy 4 running Android 11 took about 26 seconds with Whisper Small Q5_1
   for an 11-second English sample and 26 seconds for a 4.5-second synthetic
   Vietnamese sample. It did not keep up with live playback on that device, and
@@ -125,7 +174,7 @@ versions and the source archive checksum are pinned in the build configuration.
   not an accuracy benchmark or a guarantee for other devices.
 - On emulator-5554, greedy decoding with a clip-sized encoder context reduced
   the same English sample from 4.45 to 1.85 seconds and Vietnamese from 3.63 to
-  1.28 seconds. The multilingual Small model is unchanged. Initial translation
+  1.28 seconds in that historical Small-model benchmark. Initial translation
   model loading happens before capture starts; auto-detected source languages
   other than English can still need a source-model download on first use.
 - The floating panel has independent original/media and translated/accessibility
@@ -150,7 +199,8 @@ in memory while a request is processed and released afterwards.
 Gemini fallback is optional and disabled by default. Enabling it allows screenshots
 that need cloud processing to be sent to Google using your API key. Text
 translation history and app settings are stored locally. Audio translation uses
-Whisper, ML Kit and an offline TTS voice on the device when both online providers are disabled.
+Whisper, ML Kit and local speech synthesis (KorvaTTS for Vietnamese, an offline
+Android TTS voice for other languages) when both online providers are disabled.
 Gemini Live audio translation is a separate, opt-in mode: selected-app audio is sent
 to Gemini Live and translated speech is streamed back. OpenAI is a separate opt-in
 provider that sends selected-app audio to OpenAI instead. The app does not record the

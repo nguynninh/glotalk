@@ -203,7 +203,7 @@
     <string name="audio_network_failed">因连接错误而停止，请检查网络后重新开启音频翻译。</string>
     <string name="audio_translation_failed">无法识别或翻译语音。请选择源语言，首次下载翻译模型时请联网。</string>
     <string name="audio_too_slow">因处理跟不上音频而停止，请尝试降低源应用的播放速度。</string>
-    <string name="audio_preparing_model">正在准备 Whisper，首次需下载约 191 MB。</string>
+    <string name="audio_preparing_model">正在准备离线模型。识别模型约61 MB（明确选择越南语输入时约191 MB）；越南语语音还需约398 MB。</string>
     <string name="audio_model_failed">无法准备 Whisper 模型，请检查网络和可用存储空间后重试。</string>
     <string name="gemini_live_section">实时音频翻译 · Gemini Live</string>
     <string name="gemini_live_description">启用并保存后，通过Gemini Live将所选应用的音频发送至Google。自动识别源语言并返回目标语言的语音，不加载Whisper。使用个人Gemini API密钥，与屏幕翻译密钥分开存储。费用和限额取决于您的Google AI Studio项目。翻译语音由AI生成。</string>
@@ -253,4 +253,12 @@
     <string name="openai_realtime_key_required">OpenAI 密钥缺失、无效或没有访问权限。请在设置中输入 API 密钥并保存。</string>
     <string name="openai_realtime_api_failed">OpenAI 无法处理翻译会话。请检查 gpt-realtime-translate 的访问权限和目标语言。</string>
     <string name="openai_realtime_limit_failed">已达到 OpenAI 配额或速率限制。请检查 API 用量并重新启动音频翻译。</string>
+    <string name="korva_preparing">正在准备越南语语音</string>
+    <string name="korva_synthesizing">正在生成语音</string>
+    <string name="korva_download_notice">首次使用需下载约398 MB。下载完成后即可离线使用。</string>
+    <string name="korva_synthesis_notice">正在设备上生成音频。您可以随时取消。</string>
+    <string name="korva_failed">无法生成语音。如果模型尚未下载完成，请检查网络连接，检查可用存储空间后重试。</string>
+    <string name="onplay_audio_title">ONPlay Server</string>
+    <string name="onplay_audio_description">将所选应用的音频发送到ONPlay，并在收到翻译语音后逐段播放。需要联网，无需API密钥。使用所选源语言，自动模式下自动检测。</string>
+    <string name="onplay_audio_enable">使用ONPlay Server</string>
 </resources>

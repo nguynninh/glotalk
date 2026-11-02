@@ -32,13 +32,20 @@ class LocalWhisperTest {
             Log.i("WhisperBenchmark", "audio_ms=${(wav.size - 44) / 32} inference_ms=$elapsed")
             assertTrue(text, text.contains("country", ignoreCase = true))
             assertTrue(text, text.contains("ask", ignoreCase = true))
-            val vietnamese = instrumentation.context.assets.open("whisper-vietnamese.wav").use { it.readBytes() }
-            val viBegan = SystemClock.elapsedRealtime()
-            val vi = withTimeout(90000) { whisper.transcribe(vietnamese, Language.VIETNAMESE, "", vad) }
-            Log.i("WhisperBenchmark", "vi_audio_ms=${(vietnamese.size - 44) / 32} inference_ms=${SystemClock.elapsedRealtime() - viBegan} transcript=$vi")
-            assertTrue(vi, vi.contains("Hà Nội", ignoreCase = true))
-            assertTrue(vi, vi.contains("15") || vi.contains("mười lăm", ignoreCase = true))
-            assertTrue(vi, vi.contains("đừng", ignoreCase = true) || vi.contains("không", ignoreCase = true))
+            val (viModel, _) = WhisperModelStore(instrumentation.targetContext).prepare(Language.VIETNAMESE)
+            val vietnameseRecognizer = LocalWhisper()
+            try {
+                vietnameseRecognizer.initialize(viModel)
+                val vietnamese = instrumentation.context.assets.open("whisper-vietnamese.wav").use { it.readBytes() }
+                val viBegan = SystemClock.elapsedRealtime()
+                val vi = withTimeout(90000) { vietnameseRecognizer.transcribe(vietnamese, Language.VIETNAMESE, "", vad) }
+                Log.i("WhisperBenchmark", "vi_model=${viModel.name} vi_audio_ms=${(vietnamese.size - 44) / 32} inference_ms=${SystemClock.elapsedRealtime() - viBegan}")
+                assertTrue(vi, vi.contains("Hà Nội", ignoreCase = true))
+                assertTrue(vi, vi.contains("15") || vi.contains("mười lăm", ignoreCase = true))
+                assertTrue(vi, vi.contains("đừng", ignoreCase = true) || vi.contains("không", ignoreCase = true))
+            } finally {
+                withContext(NonCancellable + Dispatchers.Default) { vietnameseRecognizer.close() }
+            }
             assertEquals("", whisper.transcribe(ByteArray(44 + 16000 * 2 * 3), Language.AUTO, "", vad))
             val pending = launch { whisper.transcribe(wav, Language.ENGLISH, "", vad) }
             yield()

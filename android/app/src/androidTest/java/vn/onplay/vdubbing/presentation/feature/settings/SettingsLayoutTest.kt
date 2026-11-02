@@ -89,7 +89,7 @@ class SettingsLayoutTest {
                     onBubbleEnabledChange = {},
                     onSourceLanguageChange = { selected = it }, onTargetLanguageChange = {},
                     onDisplayModeChange = {}, onThemeModeChange = {}, onAppLanguageChange = {},
-                    onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> },
+                    onSaveGeminiLive = { _, _ -> }, onSaveOpenAiRealtime = { _, _ -> }, onOnPlayAudioChange = {},
                     onSaveCloud = { _, _ -> }, onVerifyKey = {}, onDismissMessage = {},
                 )
             }

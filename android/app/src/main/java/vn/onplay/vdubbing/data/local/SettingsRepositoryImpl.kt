@@ -35,7 +35,10 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         get() = prefs.getBoolean("openai_realtime_audio_enabled", false)
         set(value) = prefs.edit {
             putBoolean("openai_realtime_audio_enabled", value)
-            if (value) putBoolean("gemini_live_audio_enabled", false)
+            if (value) {
+                putBoolean("gemini_live_audio_enabled", false)
+                putBoolean("onplay_audio_enabled", false)
+            }
         }
 
     override var geminiLiveKey: String
@@ -46,7 +49,20 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         get() = prefs.getBoolean("gemini_live_audio_enabled", false)
         set(value) = prefs.edit {
             putBoolean("gemini_live_audio_enabled", value)
-            if (value) putBoolean("openai_realtime_audio_enabled", false)
+            if (value) {
+                putBoolean("openai_realtime_audio_enabled", false)
+                putBoolean("onplay_audio_enabled", false)
+            }
+        }
+
+    override var onPlayAudioEnabled: Boolean
+        get() = prefs.getBoolean("onplay_audio_enabled", false)
+        set(value) = prefs.edit {
+            putBoolean("onplay_audio_enabled", value)
+            if (value) {
+                putBoolean("openai_realtime_audio_enabled", false)
+                putBoolean("gemini_live_audio_enabled", false)
+            }
         }
 
     override var geminiKey: String

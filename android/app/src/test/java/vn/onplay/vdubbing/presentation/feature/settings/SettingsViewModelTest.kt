@@ -166,11 +166,40 @@ class SettingsViewModelTest {
         assertTrue(fixture.settings.geminiLiveAudioEnabled)
     }
 
+    @Test
+    fun `ONPlay switches exclusively and stops only changed sessions`() = runTest(dispatcher) {
+        val fixture = Fixture()
+        val model = fixture.model()
+        model.onSaveGeminiLive("gemini-key", true)
+        model.onOnPlayAudioChange(true)
+        assertTrue(fixture.settings.onPlayAudioEnabled)
+        assertTrue(model.state.value.onPlayAudioEnabled)
+        assertFalse(fixture.settings.geminiLiveAudioEnabled)
+        assertFalse(model.state.value.geminiLiveAudioEnabled)
+        assertEquals(2, fixture.audioStops)
+        model.onOnPlayAudioChange(true)
+        assertEquals(2, fixture.audioStops)
+        model.onSaveOpenAiRealtime("sk-test", true)
+        assertFalse(fixture.settings.onPlayAudioEnabled)
+        assertFalse(model.state.value.onPlayAudioEnabled)
+        model.onOnPlayAudioChange(true)
+        assertFalse(fixture.settings.openAiRealtimeAudioEnabled)
+        assertFalse(model.state.value.openAiRealtimeAudioEnabled)
+        model.onSaveGeminiLive("gemini-key", true)
+        assertFalse(model.state.value.onPlayAudioEnabled)
+        model.onOnPlayAudioChange(true)
+        model.onOnPlayAudioChange(false)
+        assertFalse(fixture.settings.onPlayAudioEnabled)
+        assertFalse(fixture.settings.geminiLiveAudioEnabled)
+        assertFalse(fixture.settings.openAiRealtimeAudioEnabled)
+    }
+
     private class Fixture {
         val settings = object : SettingsRepository {
             override var openAiRealtimeKey = ""
             override var openAiRealtimeAudioEnabled = false
             override var geminiLiveKey = ""
+            override var onPlayAudioEnabled = false
             override var geminiLiveAudioEnabled = false
             override var geminiKey = ""
             override var cloudFallbackEnabled = false

@@ -203,7 +203,7 @@
     <string name="audio_network_failed">接続エラーで停止しました。ネットワークを確認して再度オンにしてください。</string>
     <string name="audio_translation_failed">音声を認識・翻訳できません。元の言語を選び、初回の翻訳モデル取得時は接続してください。</string>
     <string name="audio_too_slow">音声処理が追いつかず停止しました。元のアプリの再生速度を下げてください。</string>
-    <string name="audio_preparing_model">Whisperを準備中です。初回は約191 MBをダウンロードします。</string>
+    <string name="audio_preparing_model">オフラインモデルを準備中です。認識用は約61 MB（入力言語にベトナム語を選択した場合は191 MB）、ベトナム語音声にはさらに約398 MBが必要です。</string>
     <string name="audio_model_failed">Whisperモデルを準備できません。ネットワークと空き容量を確認してください。</string>
     <string name="gemini_live_section">リアルタイム音声翻訳 · Gemini Live</string>
     <string name="gemini_live_description">有効にして保存すると、選択したアプリの音声をGemini Live経由でGoogleに送信します。元の言語を自動検出し、翻訳先の言語で音声を返します。Whisperは読み込みません。個人のGemini APIキーを使用し、画面翻訳のキーとは別に保存します。料金と利用上限はGoogle AI Studioのプロジェクトに従います。翻訳音声はAIが生成します。</string>
@@ -253,4 +253,12 @@
     <string name="openai_realtime_key_required">OpenAI キーが未設定、無効、またはアクセス権がありません。設定で API キーを入力して保存してください。</string>
     <string name="openai_realtime_api_failed">OpenAI で翻訳できませんでした。gpt-realtime-translate の利用権と翻訳先言語を確認してください。</string>
     <string name="openai_realtime_limit_failed">OpenAI の利用上限またはレート制限に達しました。API の使用量を確認して音声翻訳を再開してください。</string>
+    <string name="korva_preparing">ベトナム語の音声を準備中</string>
+    <string name="korva_synthesizing">音声を生成中</string>
+    <string name="korva_download_notice">初回は約398 MBをダウンロードします。完了後はオフラインで利用できます。</string>
+    <string name="korva_synthesis_notice">端末上で音声を生成しています。いつでもキャンセルできます。</string>
+    <string name="korva_failed">音声を生成できませんでした。モデルのダウンロードが未完了の場合は接続を確認し、空き容量を確認して再試行してください。</string>
+    <string name="onplay_audio_title">ONPlay Server</string>
+    <string name="onplay_audio_description">選択したアプリの音声をONPlayに送信し、届いた翻訳音声を区間ごとに再生します。インターネットが必要です。APIキーは不要です。選択した原語を使用し、自動モードでは自動検出します。</string>
+    <string name="onplay_audio_enable">ONPlay Serverを使う</string>
 </resources>

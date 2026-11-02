@@ -209,7 +209,7 @@
     <string name="audio_network_failed">Đã dừng vì lỗi kết nối. Kiểm tra mạng rồi bật lại Dịch âm thanh.</string>
     <string name="audio_translation_failed">Không nhận dạng hoặc dịch được lời nói. Chọn đúng ngôn ngữ nguồn và kết nối mạng nếu cần tải model dịch lần đầu.</string>
     <string name="audio_too_slow">Đã dừng vì xử lý không theo kịp âm thanh. Thử giảm tốc độ phát của app nguồn.</string>
-    <string name="audio_preparing_model">Đang chuẩn bị Whisper. Lần đầu tải khoảng 191 MB.</string>
+    <string name="audio_preparing_model">Đang chuẩn bị model offline. Nhận dạng tải khoảng 61 MB (191 MB nếu chọn nguồn tiếng Việt); giọng đọc tiếng Việt cần thêm khoảng 398 MB.</string>
     <string name="audio_model_failed">Không chuẩn bị được model Whisper. Kiểm tra mạng, dung lượng trống rồi thử lại.</string>
     <string name="gemini_live_section">Dịch âm thanh trực tiếp · Gemini Live</string>
     <string name="gemini_live_description">Bật và lưu để gửi âm thanh của app đang chọn đến Google qua Gemini Live. Tự nhận diện tiếng nguồn và trả giọng dịch theo ngôn ngữ đích; không chạy Whisper trên máy. Dùng API key Gemini cá nhân, lưu riêng với key dịch màn hình. Chi phí và hạn mức theo dự án Google AI Studio của bạn. Giọng dịch do AI tạo.</string>
@@ -259,4 +259,12 @@
     <string name="openai_realtime_key_required">Chưa có key OpenAI hợp lệ hoặc key không có quyền truy cập. Mở Cài đặt, nhập API key OpenAI rồi lưu.</string>
     <string name="openai_realtime_api_failed">OpenAI không xử lý được phiên dịch. Kiểm tra quyền dùng gpt-realtime-translate và ngôn ngữ đích.</string>
     <string name="openai_realtime_limit_failed">OpenAI đã chạm hạn mức hoặc giới hạn tần suất. Kiểm tra mức sử dụng trong tài khoản OpenAI API rồi bật lại dịch âm thanh.</string>
+    <string name="korva_preparing">Chuẩn bị giọng đọc tiếng Việt</string>
+    <string name="korva_synthesizing">Đang tạo giọng đọc</string>
+    <string name="korva_download_notice">Lần đầu cần tải khoảng 398 MB. Sau khi tải xong, bạn có thể nghe hoàn toàn offline.</string>
+    <string name="korva_synthesis_notice">Đang tạo âm thanh trên thiết bị. Bạn có thể hủy bất cứ lúc nào.</string>
+    <string name="korva_failed">Không thể tạo giọng đọc. Kiểm tra kết nối nếu chưa tải xong model, dung lượng trống rồi thử lại.</string>
+    <string name="onplay_audio_title">ONPlay Server</string>
+    <string name="onplay_audio_description">Gửi âm thanh của ứng dụng đã chọn đến ONPlay và phát giọng dịch theo từng đoạn ngay khi có kết quả. Cần Internet, không cần API key. Dùng ngôn ngữ nguồn đã chọn hoặc tự nhận diện khi chọn Tự động.</string>
+    <string name="onplay_audio_enable">Dùng ONPlay Server</string>
 </resources>

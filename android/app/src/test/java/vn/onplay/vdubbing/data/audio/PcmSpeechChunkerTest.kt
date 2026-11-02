@@ -21,24 +21,24 @@ class PcmSpeechChunkerTest {
         val chunker = PcmSpeechChunker()
         repeat(20) { chunker.accept(silence) }
         repeat(100) { assertNull(chunker.accept(speech)) }
-        repeat(39) { assertNull(chunker.accept(silence)) }
+        repeat(24) { assertNull(chunker.accept(silence)) }
         val wav = chunker.accept(silence)!!
         val header = ByteBuffer.wrap(wav).order(ByteOrder.LITTLE_ENDIAN)
         assertEquals("RIFF", wav.copyOfRange(0, 4).toString(Charsets.US_ASCII))
         assertEquals(wav.size - 8, header.getInt(4))
         assertEquals(16000, header.getInt(24))
         assertEquals(16, header.getShort(34).toInt())
-        assertEquals(150 * speech.size, header.getInt(40))
+        assertEquals(135 * speech.size, header.getInt(40))
         assertArrayEquals(speech, wav.copyOfRange(44 + 10 * speech.size, 44 + 11 * speech.size))
         repeat(100) { assertNull(chunker.accept(silence)) }
     }
 
     @Test fun `continuous audio is bounded and preserves samples at forced boundaries`() {
         val chunker = PcmSpeechChunker()
-        val chunks = (0 until 1500).mapNotNull { chunker.accept(speech) }
-        assertEquals(6, chunks.size)
+        val chunks = (0 until 1600).mapNotNull { chunker.accept(speech) }
+        assertEquals(4, chunks.size)
         chunks.forEach {
-            assertEquals(44 + 250 * speech.size, it.size)
+            assertEquals(44 + 400 * speech.size, it.size)
             assertArrayEquals(speech, it.takeLast(speech.size).toByteArray())
         }
     }

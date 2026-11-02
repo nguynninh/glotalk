@@ -9,6 +9,7 @@ interface SettingsRepository {
     var openAiRealtimeKey: String
     var openAiRealtimeAudioEnabled: Boolean
     var geminiLiveKey: String
+    var onPlayAudioEnabled: Boolean
     var geminiLiveAudioEnabled: Boolean
     var geminiKey: String
     var cloudFallbackEnabled: Boolean

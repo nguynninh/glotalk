@@ -45,6 +45,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.VDubbing"
         tools:targetApi="36">
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            android:authorities="${applicationId}.onnxruntime_telemetry_initializer"
+            tools:node="remove" />
 
         <activity
             android:name=".MainActivity"

@@ -6,6 +6,8 @@ import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.Translator
 import com.google.mlkit.nl.translate.TranslatorOptions
 import android.util.Log
+import android.os.SystemClock
+import vn.onplay.vdubbing.data.audio.traceAudio
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -31,6 +33,7 @@ class TranslationRepositoryImpl : TranslationRepository {
     private val identifier by lazy { LanguageIdentification.getClient() }
     private val translators = HashMap<String, Translator>()
     private val translationMutex = Mutex()
+    private val preparedPairs = HashSet<String>()
 
     override suspend fun detect(text: String): Language = withContext(Dispatchers.Default) {
         val code = try {
@@ -51,8 +54,10 @@ class TranslationRepositoryImpl : TranslationRepository {
     ): List<String> = translationMutex.withLock {
         if (source == target || !source.isTranslatable || !target.isTranslatable) return@withLock lines
 
+        traceAudio("mlkit_lock_acquired", "source=${source.code} target=${target.code}")
         val translator = translatorFor(source, target)
         prepareTranslator(translator, source, target)
+        traceAudio("mlkit_inference_started", "lines=${lines.size}")
         withContext(Dispatchers.Default) {
             var failed = 0
             val translated = lines.map { line ->
@@ -87,12 +92,21 @@ class TranslationRepositoryImpl : TranslationRepository {
 
     private suspend fun prepareTranslator(translator: Translator, source: Language, target: Language) =
         withContext(Dispatchers.Default) {
+            val pair = "${source.code}>${target.code}"
+            if (pair in preparedPairs) {
+                traceAudio("mlkit_models_cached", "pair=$pair")
+                return@withContext
+            }
+            val start = SystemClock.elapsedRealtime()
+            traceAudio("mlkit_models_preparing", "pair=$pair may_download=true")
             try {
                 // Model loading must finish before another request uses the cached client.
                 withContext(NonCancellable) {
                     translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
                 }
                 ensureActive()
+                preparedPairs += pair
+                traceAudio("mlkit_models_ready", "pair=$pair duration_ms=${SystemClock.elapsedRealtime() - start}")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -117,6 +131,7 @@ class TranslationRepositoryImpl : TranslationRepository {
         runCatching { identifier.close() }
         translators.values.forEach { runCatching { it.close() } }
         translators.clear()
+        preparedPairs.clear()
     }
 
     private companion object {

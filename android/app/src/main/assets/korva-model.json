@@ -1,0 +1,40 @@
+{
+  "revision": "e5c8c218e93c1d8daa53bfe0e62b8fbc5a5e991d",
+  "files": [
+    {
+      "path": "onnx/duration_predictor.onnx",
+      "bytes": 3573391,
+      "sha256": "c59dd540d003e781f55efc3f39807ad9939164a34dbc74eb05f39ab41b4632d7"
+    },
+    {
+      "path": "onnx/text_encoder.onnx",
+      "bytes": 35678255,
+      "sha256": "4522eea5c39f68c101f27fc14758cc65311a4abfc64500ddf32e6d582de5daab"
+    },
+    {
+      "path": "onnx/tts.json",
+      "bytes": 8493,
+      "sha256": "d9b6bd2844a45ecccfd521b2defeaf74d45ea23e8cc099b980c1e0198c7f2365"
+    },
+    {
+      "path": "onnx/unicode_indexer.json",
+      "bytes": 277676,
+      "sha256": "9bf7346e43883a81f8645c81224f786d43c5b57f3641f6e7671a7d6c493cb24f"
+    },
+    {
+      "path": "onnx/vector_estimator.onnx",
+      "bytes": 256700640,
+      "sha256": "f7a5abb7feca5e657977781953cd30997869eb54363bdcc729e848b4c7ca2702"
+    },
+    {
+      "path": "onnx/vocoder.onnx",
+      "bytes": 101426104,
+      "sha256": "7d305c4cc06e9cd2ac47834d90e9b97b69df316cbda75682dd0f4c17d289324f"
+    },
+    {
+      "path": "voice_styles/khanh_vy.json",
+      "bytes": 270909,
+      "sha256": "8fae3454ffb773fc0cbcdbe75625c4f2779b9a657d485416835287a95b673e8e"
+    }
+  ]
+}

@@ -206,7 +206,7 @@
     <string name="audio_network_failed">Stopped due to a connection error. Check your network and enable audio translation again.</string>
     <string name="audio_translation_failed">Could not recognize or translate speech. Select the source language and connect to download translation models on first use.</string>
     <string name="audio_too_slow">Stopped because processing could not keep up. Try slowing down source playback.</string>
-    <string name="audio_preparing_model">Preparing Whisper. The first download is about 191 MB.</string>
+    <string name="audio_preparing_model">Preparing offline models. Recognition downloads about 61 MB (191 MB for an explicitly selected Vietnamese source); Vietnamese speech needs another 398 MB.</string>
     <string name="audio_model_failed">Could not prepare the Whisper model. Check your network and free storage, then retry.</string>
     <string name="gemini_live_section">Live audio translation · Gemini Live</string>
     <string name="gemini_live_description">Enable and save to send audio from the selected app to Google through Gemini Live. It detects the source language and returns speech in the target language without loading Whisper. Use your personal Gemini API key, stored separately from the screen translation key. Costs and limits depend on your Google AI Studio project. The translated voice is AI-generated.</string>
@@ -256,4 +256,12 @@
     <string name="openai_realtime_key_required">The OpenAI key is missing, invalid or lacks access. Enter your OpenAI API key in Settings and save.</string>
     <string name="openai_realtime_api_failed">OpenAI could not process this translation session. Check access to gpt-realtime-translate and the target language.</string>
     <string name="openai_realtime_limit_failed">OpenAI quota or rate limit reached. Check your OpenAI API usage and restart audio translation.</string>
+    <string name="korva_preparing">Preparing Vietnamese voice</string>
+    <string name="korva_synthesizing">Generating speech</string>
+    <string name="korva_download_notice">The first use downloads about 398 MB. Once downloaded, speech works entirely offline.</string>
+    <string name="korva_synthesis_notice">Generating audio on your device. You can cancel at any time.</string>
+    <string name="korva_failed">Could not generate speech. Check your connection if the model download is incomplete, check free storage, then try again.</string>
+    <string name="onplay_audio_title">ONPlay Server</string>
+    <string name="onplay_audio_description">Send audio from the selected app to ONPlay and play translated segments as they arrive. Internet required; no API key needed. Uses the selected source language, or detects it in Auto mode.</string>
+    <string name="onplay_audio_enable">Use ONPlay Server</string>
 </resources>

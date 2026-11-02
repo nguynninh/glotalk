@@ -34,6 +34,7 @@ data class SettingsUiState(
     val openAiRealtimeKey: String = "",
     val openAiRealtimeAudioEnabled: Boolean = false,
     val geminiLiveKey: String = "",
+    val onPlayAudioEnabled: Boolean = false,
     val geminiLiveAudioEnabled: Boolean = false,
     /** What the screen is assumed to be in; AUTO asks the translator to detect it. */
     val sourceLanguage: Language = Language.AUTO,

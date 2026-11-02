@@ -30,7 +30,7 @@ internal class PcmSpeechChunker {
             audibleFrames++
             quietFrames = 0
         } else quietFrames++
-        if (frames < MAX_FRAMES && (frames < 50 || quietFrames < 40)) return null
+        if (frames < MAX_FRAMES && (frames < 50 || quietFrames < 25)) return null
         val chunk = if (audibleFrames >= 10) wav(audio.toByteArray()) else null
         audio.reset()
         frames = 0
@@ -40,7 +40,7 @@ internal class PcmSpeechChunker {
     }
 
     companion object {
-        const val MAX_FRAMES = 250
+        const val MAX_FRAMES = 400
         const val SAMPLE_RATE = 16000
         const val FRAME_BYTES = 640 // 20 ms of mono PCM16 at 16 kHz.
 

@@ -489,7 +489,9 @@ it as a regression.
 - `AudioTranslationService` is a private, non-sticky foreground service for
   playback capture and speech. Its projection grant and source UID belong to one
   session; do not persist or reuse grants or capture all apps. Offline mode uses
-  Whisper, ML Kit and an installed offline TTS voice. The opt-in Gemini Live mode sends
+  Whisper Base Q5_1 (Small Q5_1 for an explicitly selected Vietnamese source) and
+  a session-owned ML Kit translator; Vietnamese speech uses KorvaTTS on ONNX Runtime (8 steps),
+  while other target languages require an installed offline system TTS voice. The opt-in Gemini Live mode sends
   only the selected app's PCM audio directly to Google Gemini Live and streams translated PCM
   back; the opt-in OpenAI mode uses `gpt-realtime-translate` at
   `/v1/realtime/translations` with 24 kHz mono PCM16 input and output. Only one
@@ -499,8 +501,11 @@ it as a regression.
   Use `gemini-3.5-live-translate-preview` with 16 kHz PCM input and 24 kHz PCM output.
   Saving changed online audio settings stops the current audio session. Disconnection or
   slow queues in online mode must stop capture/playback rather than reconnecting silently.
-  Offline mode finishes the current translation and speech and keeps only the latest
-  waiting clip; it may skip intermediate clips on slow devices.
+  Offline capture, recognition/translation and speech run as bounded stages.
+  Preserve captured dialogue in order: never conflate or silently discard waiting
+  speech. Stop with `audio_too_slow` when the three-clip capture queue overflows.
+  Capture chunks end after 500 ms of silence, with an eight-second maximum plus
+  pre-roll. Korva generates the next text chunk or utterance while playing the current one.
 - Organize each screen under `presentation/feature/<feature>/`. Keep `*UI.kt`
   as the screen entry point receiving its ViewModel via `hiltViewModel()`.
   Feature content belongs in that feature's `components/`; its state, commands

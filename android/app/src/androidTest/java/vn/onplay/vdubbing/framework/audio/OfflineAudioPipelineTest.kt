@@ -28,6 +28,7 @@ import vn.onplay.vdubbing.VDubbingApp
 import vn.onplay.vdubbing.framework.accessibility.AccessibilityBridge
 import org.junit.Test
 import org.junit.runner.RunWith
+import vn.onplay.vdubbing.data.audio.AudioTrace
 import vn.onplay.vdubbing.data.audio.LocalWhisper
 import vn.onplay.vdubbing.data.audio.WhisperAudioTranslationRepository
 import vn.onplay.vdubbing.data.audio.WhisperModelStore
@@ -147,7 +148,7 @@ class OfflineAudioPipelineTest {
         }
     }
 
-    @Test fun recognizesTranslatesAndSpeaksEnglishInVietnamese() = runBlocking {
+    @Test fun recognizesTranslatesAndSpeaksEnglishInVietnamese() = runBlocking(AudioTrace("pipeline-test")) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val (model, vad) = WhisperModelStore(context).prepare()

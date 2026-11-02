@@ -1,6 +1,7 @@
 package vn.onplay.vdubbing.data.audio
 
 import android.content.Context
+import vn.onplay.vdubbing.domain.model.Language
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
@@ -26,8 +27,8 @@ internal class WhisperModelStore(context: Context) {
     private val mutex = Mutex()
     private val http = OkHttpClient.Builder().readTimeout(30, TimeUnit.SECONDS).build()
 
-    suspend fun prepare(): Pair<File, File> = mutex.withLock {
-        ensure(MODEL) to ensure(VAD)
+    suspend fun prepare(source: Language = Language.AUTO): Pair<File, File> = mutex.withLock {
+        ensure(if (source == Language.VIETNAMESE) VIETNAMESE_MODEL else MODEL) to ensure(VAD)
     }
 
     private suspend fun ensure(spec: Model): File {
@@ -98,6 +99,12 @@ internal class WhisperModelStore(context: Context) {
 
     companion object {
         private val MODEL = Model(
+            "ggml-base-q5_1.bin",
+            "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base-q5_1.bin",
+            59707625,
+            "422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898",
+        )
+        private val VIETNAMESE_MODEL = Model(
             "ggml-small-q5_1.bin",
             "https://huggingface.co/ggerganov/whisper.cpp/resolve/f281eb45af861ab5e5297d23694b7d46e090c02c/ggml-small-q5_1.bin",
             190085487,

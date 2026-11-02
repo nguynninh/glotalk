@@ -11,6 +11,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
+import vn.onplay.vdubbing.data.speech.VietnameseSpeechRepositoryImpl
+import vn.onplay.vdubbing.domain.repository.VietnameseSpeechRepository
 import vn.onplay.vdubbing.VDubbingApp
 import vn.onplay.vdubbing.domain.model.DisplayMode
 import vn.onplay.vdubbing.domain.repository.BackgroundStatusRepository
@@ -30,6 +32,10 @@ import vn.onplay.vdubbing.presentation.ServiceController
 @Module
 @InstallIn(SingletonComponent::class)
 object PresentationModule {
+    @Provides
+    fun vietnameseSpeech(@ApplicationContext context: Context): VietnameseSpeechRepository =
+        VietnameseSpeechRepositoryImpl(context)
+
     @Provides
     fun countdown(): Countdown = AndroidCountdown()
 

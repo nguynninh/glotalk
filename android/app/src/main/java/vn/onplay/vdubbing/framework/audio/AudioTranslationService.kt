@@ -1,5 +1,8 @@
 package vn.onplay.vdubbing.framework.audio
 
+import java.io.IOException
+import vn.onplay.vdubbing.data.audio.OnPlaySegmentTranslation
+import vn.onplay.vdubbing.data.audio.OnPlayBacklogException
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -36,6 +39,7 @@ import vn.onplay.vdubbing.MainActivity
 import vn.onplay.vdubbing.BuildConfig
 import vn.onplay.vdubbing.R
 import vn.onplay.vdubbing.VDubbingApp
+import vn.onplay.vdubbing.data.mlkit.TranslationRepositoryImpl
 import vn.onplay.vdubbing.data.audio.LocalWhisper
 import vn.onplay.vdubbing.domain.model.Language
 import vn.onplay.vdubbing.domain.model.TranslationException
@@ -103,9 +107,12 @@ internal class AudioTranslationService : Service() {
             }
             projectionCallback = callback
             activeProjection.registerCallback(callback, Handler(Looper.getMainLooper()))
+            if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "session_started id=${requested.id} source=${requested.source.code} target=${requested.target.code} mode=${if (container.settings.onPlayAudioEnabled) "onplay" else if (container.settings.openAiRealtimeAudioEnabled) "openai" else if (container.settings.geminiLiveAudioEnabled) "gemini" else "offline"}")
             pipeline = scope.launch {
                 try {
-                    if (container.settings.openAiRealtimeAudioEnabled) {
+                    if (container.settings.onPlayAudioEnabled) {
+                        runOnPlayPipeline(requested, activeProjection)
+                    } else if (container.settings.openAiRealtimeAudioEnabled) {
                         runLivePipeline(requested, activeProjection, openAi = true)
                     } else if (container.settings.geminiLiveAudioEnabled) {
                         runLivePipeline(requested, activeProjection, openAi = false)
@@ -118,7 +125,10 @@ internal class AudioTranslationService : Service() {
                     throw cancelled
                 } catch (error: Exception) {
                     fail(when (error) {
+                        is OnPlayBacklogException -> R.string.audio_too_slow
+                        is IOException -> R.string.audio_network_failed
                         is AudioFailure -> error.messageRes
+                        is OfflineAudioBacklogException -> R.string.audio_too_slow
                         is OpenAiRealtimeAudioException -> when (error.reason) {
                             OpenAiRealtimeAudioException.Reason.KEY -> R.string.openai_realtime_key_required
                             OpenAiRealtimeAudioException.Reason.LIMIT -> R.string.openai_realtime_limit_failed
@@ -143,6 +153,31 @@ internal class AudioTranslationService : Service() {
             fail(R.string.audio_start_failed)
         }
         return START_NOT_STICKY
+    }
+
+    private suspend fun runOnPlayPipeline(current: AudioSession, activeProjection: MediaProjection) {
+        update(AudioStage.CONNECTING)
+        val input = channelFlow {
+            scope.launch { if (session?.id == current.id) update(AudioStage.LISTENING) }
+            AppAudioCapture(activeProjection, current.uid).collectFrames(16000, 100,
+                onSilence = { scope.launch {
+                    if (session?.id == current.id) update(AudioStage.NO_AUDIO)
+                } },
+            ) { send(it.copyOf()) }
+        }.buffer(1)
+        OnPlaySegmentTranslation().audio(current.source, current.target, input,
+            onSpeechError = {
+                scope.launch {
+                    if (session?.id == current.id) {
+                        Toast.makeText(this@AudioTranslationService, R.string.audio_translation_failed, Toast.LENGTH_LONG).show()
+                    }
+                }
+            },
+        ).collect { wav ->
+            playOnPlayWav(applicationContext, wav) { update(AudioStage.SPEAKING) }
+            update(AudioStage.LISTENING)
+        }
+        if (session?.id == current.id) stopSession()
     }
 
     private suspend fun runLivePipeline(current: AudioSession, activeProjection: MediaProjection, openAi: Boolean) {
@@ -171,10 +206,11 @@ internal class AudioTranslationService : Service() {
         val local = try { LocalWhisper().also { whisper = it } } catch (_: LinkageError) {
             throw AudioFailure(R.string.audio_model_failed)
         }
+        val audioTranslation = TranslationRepositoryImpl()
         try {
             update(AudioStage.PREPARING_MODEL)
             val (_, vad) = try {
-                container.whisperModels.prepare().also { local.initialize(it.first) }
+                container.whisperModels.prepare(current.source).also { local.initialize(it.first) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -184,18 +220,21 @@ internal class AudioTranslationService : Service() {
             try {
                 voice.initialize(current.target)
             } catch (_: TimeoutCancellationException) {
-                throw AudioFailure(R.string.audio_voice_failed)
+                throw voiceFailure(current.target)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                throw AudioFailure(R.string.audio_voice_failed)
+                throw voiceFailure(current.target)
             }
-            container.translation.prepare(
+            audioTranslation.prepare(
                 current.source.takeIf { it.isTranslatable } ?: Language.ENGLISH, current.target,
             )
-            runPipeline(current, activeProjection, voice, container.audioTranslation(local, vad))
+            runPipeline(current, activeProjection, voice, container.audioTranslation(local, vad, audioTranslation))
         } finally {
-            withContext(NonCancellable + Dispatchers.Default) { local.close() }
+            withContext(NonCancellable + Dispatchers.Default) {
+                audioTranslation.close()
+                local.close()
+            }
         }
     }
 
@@ -218,24 +257,36 @@ internal class AudioTranslationService : Service() {
             try {
                 voice.speak(text)
             } catch (_: TimeoutCancellationException) {
-                throw AudioFailure(R.string.audio_voice_failed)
+                throw voiceFailure(current.target)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                throw AudioFailure(R.string.audio_voice_failed)
+                throw voiceFailure(current.target)
             }
-        }, onStage = ::update)
+        }, onStage = ::update, speakStream = { requests ->
+            try {
+                voice.speakRequests(requests)
+            } catch (_: TimeoutCancellationException) {
+                throw voiceFailure(current.target)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                throw voiceFailure(current.target)
+            }
+        })
     }
 
     private fun update(stage: AudioStage) {
         val active = session ?: return
         if (container.audioSessions.state.value?.id != active.id || active.stage == stage) return
+        if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "session_stage id=${active.id} stage=$stage")
         session = active.copy(stage = stage)
         container.audioSessions.update(active.id, stage)
         manager.notify(NOTIFICATION_ID, notification(stage.messageRes).build())
     }
 
     private fun fail(message: Int) {
+        if (BuildConfig.DEBUG) Log.e("GlotalkAudio", "session_failed id=${session?.id} reason=${resources.getResourceEntryName(message)}")
         Log.w("AudioTranslation", "Session stopped: ${resources.getResourceEntryName(message)}")
         stopSession()
         manager.createNotificationChannel(NotificationChannel(
@@ -251,6 +302,7 @@ internal class AudioTranslationService : Service() {
 
     private fun releaseSession() {
         val ending = session
+        if (BuildConfig.DEBUG && ending != null) Log.i("GlotalkAudio", "session_stopped id=${ending.id}")
         session = null
         pipeline?.cancel()
         pipeline = null
@@ -293,6 +345,10 @@ internal class AudioTranslationService : Service() {
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .addAction(0, text(R.string.audio_stop), stop)
     }
+
+    private fun voiceFailure(language: Language) = AudioFailure(
+        if (language == Language.VIETNAMESE) R.string.korva_failed else R.string.audio_voice_failed,
+    )
 
     private class AudioFailure(val messageRes: Int) : Exception()
 

@@ -7,6 +7,8 @@ import android.media.AudioPlaybackCaptureConfiguration
 import android.media.AudioRecord
 import android.media.projection.MediaProjection
 import android.os.SystemClock
+import vn.onplay.vdubbing.BuildConfig
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -55,6 +57,8 @@ internal class AppAudioCapture(private val projection: MediaProjection, private 
             currentCoroutineContext().ensureActive()
             record.startRecording()
             check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING)
+            if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "capture_started uid=$uid sample_rate=$sampleRate frame_ms=$frameMillis")
+            var firstFrame = true
             val frame = ByteArray(frameBytes)
             var offset = 0
             var lastSound = SystemClock.elapsedRealtime()
@@ -66,16 +70,22 @@ internal class AppAudioCapture(private val projection: MediaProjection, private 
                 offset += count
                 if (offset < frame.size) continue
                 offset = 0
+                if (firstFrame) {
+                    firstFrame = false
+                    if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "capture_first_frame bytes=${frame.size}")
+                }
                 if (PcmSpeechChunker.isAudible(frame)) {
                     lastSound = SystemClock.elapsedRealtime()
                     reportedSilence = false
                 } else if (!reportedSilence && SystemClock.elapsedRealtime() - lastSound > 15000) {
+                    if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "capture_silence duration_ms=15000 uid=$uid")
                     onSilence()
                     reportedSilence = true
                 }
                 onFrame(frame)
             }
         } finally {
+            if (BuildConfig.DEBUG) Log.i("GlotalkAudio", "capture_stopped uid=$uid")
             runCatching { record.stop() }
             record.release()
         }

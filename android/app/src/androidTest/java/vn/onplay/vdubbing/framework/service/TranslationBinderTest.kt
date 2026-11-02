@@ -26,6 +26,7 @@ class TranslationBinderTest {
         override var openAiRealtimeKey = ""
         override var openAiRealtimeAudioEnabled = false
         override var geminiLiveKey = ""
+            override var onPlayAudioEnabled = false
             override var geminiLiveAudioEnabled = false
             override var geminiKey = ""
         override var cloudFallbackEnabled = false
