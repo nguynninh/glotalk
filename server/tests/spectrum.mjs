@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {spectrumDb} from '../ui/spectrum.mjs';
+const n = 1024, sr = 16000;
+const tone = Float64Array.from({length:n}, (_, i) => Math.sin(2 * Math.PI * 1000 * i / sr));
+const spectrum = spectrumDb(tone);
+const peak = spectrum.indexOf(Math.max(...spectrum));
+assert.equal(peak * sr / n, 1000);
+assert.ok(Math.abs(spectrum[peak]) < 0.01, 'full-scale sine should peak near 0 dBFS');
+assert.ok(spectrumDb(new Float64Array(n)).every(value => value === -120));
+assert.throws(() => spectrumDb(new Float64Array(1000)));
+console.log('PASS: FFT frequency, amplitude, silence and invalid sizes');

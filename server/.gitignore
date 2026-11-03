@@ -1,0 +1,9 @@
+.deps/
+models/
+build/
+.DS_Store
+.venv/
+.venv-*/
+__pycache__/
+
+.idea/

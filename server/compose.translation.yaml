@@ -1,0 +1,13 @@
+services:
+  translation:
+    image: libretranslate/libretranslate@sha256:cf85439147da3cf73fb525a303cfeb884946a9bc633083143bd771d6c6efb007
+    ports:
+      - "127.0.0.1:5001:5000"
+    environment:
+      LT_LOAD_ONLY: en,vi,zh
+    volumes:
+      - translation-models:/home/libretranslate/.local
+    restart: unless-stopped
+
+volumes:
+  translation-models:

@@ -1,0 +1,38 @@
+translation:
+  default_model: nllb-fast
+  fallback_model: null
+  routes:
+    en-vi: {primary: opus-fast, fallback: nllb-fast}
+    vi-en: {primary: opus-fast, fallback: nllb-fast}
+    en-zh: {primary: opus-fast, fallback: nllb-fast}
+    zh-en: {primary: opus-fast, fallback: nllb-fast}
+    vi-zh: {primary: opus-fast, fallback: nllb-fast}
+    zh-vi: {primary: opus-fast, fallback: nllb-fast}
+  context:
+    enabled: true
+    model: qwen
+    fallback: nllb-fast
+    max_segments: 5
+  cache_entries: 256
+  models:
+    nllb-fast:
+      backend: ct2_nllb
+      path: models/translation/nllb-200-ct2
+      tokenizer: models/translation/nllb-200
+    opus-fast:
+      backend: ct2_opus
+      path: models/translation/opus
+    nllb-200:
+      backend: nllb
+      path: models/translation/nllb-200
+      repository: facebook/nllb-200-distilled-600M
+      revision: f8d333a098d19b4fd9a8b18f94170487ad3f821d
+    opus-mt:
+      backend: libretranslate
+      url: http://127.0.0.1:5001
+      languages: [en, vi, zh]
+    qwen:
+      backend: qwen
+      path: models/translation/qwen-1.7b
+      repository: Qwen/Qwen3-1.7B
+      revision: 70d244cc86ccca08cf5af4e1e306ecf908b1ad5e
