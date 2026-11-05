@@ -8,12 +8,22 @@ AIDL, translation engines or app release versions exist here.
 
 Current layout:
 
-- `include/onplay/stt.hpp` exposes the streaming C++20 API.
-- `src/stt.cpp` integrates Sherpa ONNX; `src/main.cpp` reads WAV files.
+- `rust/` is a Cargo workspace. `onplay-sherpa-sys` binds the Sherpa ONNX C API
+  (bindgen); `onplay-sherpa` is the only safe wrapper allowed `unsafe`.
+- `onplay-stt` exposes the streaming `Engine`/`Session` API, WAV reading and
+  diarization; `onplay-stt-cli` builds `onplay-stt`, `onplay-recognize` and
+  `onplay-speakers`.
+- `onplay-tts`/`onplay-tts-cli` run KorvaTTS on ONNX Runtime; `onplay-dub`/
+  `onplay-dub-cli` translate and dub videos.
 - `scripts/` contains setup, build, run and test entry points.
-- `tests/session.cpp` checks session validation and finalization;
-  `tests/smoke.py` runs real-model English/Vietnamese checks.
-- `CMakeLists.txt` builds a static library and CLI with an external runtime SDK.
+- `rust/crates/onplay-stt/tests/session.rs` checks session validation and
+  finalization; `onplay-stt-cli/tests/cli.rs` runs real-model English/Vietnamese
+  checks.
+- `onplay-server`/`onplay-server-cli` build `onplay-server`, the streaming
+  WebSocket server (`127.0.0.1:8766`); there is no HTTP API or web UI.
+- `onplay-translation`/`onplay-translation-cli` build `onplay-translation`, the
+  translation router (port 5002; CTranslate2 via `ct2rs`, Qwen via candle).
+- `onplay-server-cli/tests/socket.rs` starts `build/onplay-server` and checks it.
 - `.deps/` and `models/` hold local runtime and model downloads.
 
 The shell bootstrap targets macOS ARM64, pins Sherpa ONNX v2.0.1 and verifies
@@ -57,9 +67,9 @@ implementation and relevant evidence exist.
 
 ## Verification
 
-Review the final diff and changed-file list. Run `./scripts/build.sh` and `./scripts/test.sh` when native changes require
-them and assets are available. The latter runs sanitized session checks and real
-model smoke checks. A successful compile proves compilation, not recognition
+Review the final diff and changed-file list. Run `./scripts/dev/build.sh` and `./scripts/dev/test.sh` when native changes require
+them and assets are available. The latter runs the Rust workspace tests (including
+real-model session tests) and real model smoke checks; no sanitizer runs. A successful compile proves compilation, not recognition
 accuracy, resource cleanup or realtime performance.
 
 For documentation-only work, verify paths, commands, links and implementation

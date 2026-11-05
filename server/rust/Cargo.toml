@@ -1,0 +1,75 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/onplay-sherpa-sys",
+    "crates/onplay-sherpa",
+    "crates/onplay-stt",
+    "crates/onplay-stt-cli",
+    "crates/onplay-tts",
+    "crates/onplay-tts-cli",
+    "crates/onplay-dub",
+    "crates/onplay-dub-cli",
+    "crates/onplay-server",
+    "crates/onplay-server-cli",
+    "crates/onplay-translation",
+    "crates/onplay-translation-cli",
+    "crates/onplay-translation-bench",
+    "crates/onplay-translation-bench-cli",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+publish = false
+
+[profile.release]
+strip = "symbols"
+lto = true
+codegen-units = 1
+
+[workspace.dependencies]
+onplay-tts = { path = "crates/onplay-tts" }
+onplay-dub = { path = "crates/onplay-dub" }
+onplay-sherpa = { path = "crates/onplay-sherpa" }
+onplay-sherpa-sys = { path = "crates/onplay-sherpa-sys" }
+onplay-stt = { path = "crates/onplay-stt" }
+onplay-server = { path = "crates/onplay-server" }
+onplay-translation = { path = "crates/onplay-translation" }
+onplay-translation-bench = { path = "crates/onplay-translation-bench" }
+base64 = "0.22.1"
+bindgen = "0.72.0"
+# Qwen3 context translation; Metal on Apple Silicon.
+candle-core = { version = "=0.11.1", features = ["metal"] }
+candle-nn = { version = "=0.11.1", features = ["metal"] }
+candle-transformers = { version = "=0.11.1", features = ["metal"] }
+# CTranslate2 (C++) built from source with Ruy and Accelerate, like the macOS Python wheel;
+# needs ./scripts/setup/cmake.sh.
+ct2rs = { version = "=0.10.4", default-features = false, features = ["ruy", "accelerate"] }
+lingua = { version = "=1.8.0", default-features = false, features = ["english", "vietnamese", "chinese", "japanese", "korean", "thai", "indonesian", "russian", "arabic", "french", "german", "spanish"] }
+# load-dynamic: reuse the ONNX Runtime dylib shipped with the Sherpa ONNX SDK in .deps/.
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic", "coreml"] }
+rand = "0.8.5"
+rand_distr = "0.4.3"
+regex = "1.11.1"
+sentencepiece = "=0.14.0"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+serde_yaml = "=0.9.34"
+sha2 = "0.10.8"
+thiserror = "2.0.12"
+# Plain local HTTP for the translation router; no TLS.
+tiny_http = "=0.12.0"
+# Same version as the Python router's tokenizers; pure-Rust regex instead of Oniguruma.
+tokenizers = { version = "=0.22.2", default-features = false, features = ["fancy-regex"] }
+# Sync WebSocket server for the streaming socket; no TLS (a reverse proxy terminates wss).
+tungstenite = { version = "0.24.0", default-features = false, features = ["handshake"] }
+unicode-normalization = "0.1.24"
+# Plain HTTP to the local translation router only, so no TLS backend.
+ureq = { version = "2.12.1", default-features = false }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

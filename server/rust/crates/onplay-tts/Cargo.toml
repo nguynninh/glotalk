@@ -1,0 +1,19 @@
+[package]
+name = "onplay-tts"
+description = "KorvaTTS speech synthesis on ONNX Runtime, read-only over the published model assets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+ort.workspace = true
+rand.workspace = true
+rand_distr.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+unicode-normalization.workspace = true
+
+[lints]
+workspace = true

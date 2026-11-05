@@ -1,53 +1,67 @@
-# ONPlay STT — C++ streaming lab
+# ONPlay STT — Rust streaming lab
 
-Inference offline bằng C++20 + sherpa-onnx 2.0.1, dùng model Zipformer multilingual INT8.
+Inference offline bằng Rust + sherpa-onnx 2.0.1 (C API), dùng model Zipformer multilingual INT8.
 
-## Speech processing flow
+## Streaming server
 
-Current implementation: streaming browser recognition and a separate mobile WAV API.
-
-![ONPlay STT implementation flow](docs/speech-processing-flow.svg)
-
-The browser decodes audio/video locally and sends PCM chunks to the C++ engine
-through the Python WebSocket bridge. Partial/final transcripts return immediately;
-optional translation runs on a separate worker. Optional CAM++ live speaker labels
-are provisional. After playback, recordings up to 10 minutes can be refined with
-Pyannote segmentation, CAM++ clustering and per-turn STT; refined translations
-are sent separately with segment IDs and timestamps.
-
-The mobile API accepts PCM16 mono 16 kHz WAV (up to 60 seconds and 2 MiB), runs
-offline diarization and per-turn STT, and returns speaker/timestamp segments.
-For text results, clients can call `/api/translate` sequentially for those segments.
-For audio output, `/api/translate-audio?target=vi` performs recognition, translation
-and speech synthesis in one request and returns WAV bytes.
-Language detection operates on text in the translation router, not on STT audio.
-The WebSocket and WAV upload paths share one inference lock.
-See [the mobile API guide](docs/translation-api.md) for the current contract.
-
-## Chạy giao diện trên Mac Apple Silicon
+`onplay-server` (Rust, `rust/crates/onplay-server`) is the only network service of
+this project. It listens on the WebSocket `ws://127.0.0.1:8766`; there is no HTTP API
+and no web UI. Clients (the mobile app) send PCM16 mono 16 kHz chunks and receive
+partial/final transcripts immediately. Optional translation runs on separate workers
+through the local translation router; optional speech returns per-segment WAVs
+synthesized in process with the Rust KorvaTTS port. Optional CAM++ live speaker labels
+are provisional. After the input ends, recordings up to 10 minutes can be refined with
+Pyannote segmentation, CAM++ clustering and per-turn STT; refined translations are
+sent separately with segment IDs and timestamps. One recognition session runs at a
+time. The protocol is in [docs/streaming-audio.md](docs/streaming-audio.md).
 
 ```sh
 ./scripts/setup.sh
 ./scripts/build.sh
-./scripts/ui.sh
+./scripts/dev/translation.sh   # optional, in another terminal: translation router on 5002
+./scripts/server.sh
 ```
 
-Mở http://127.0.0.1:8765, chọn hoặc thả audio/MP4 vào để tự bắt đầu nhận dạng. Cần Xcode Command Line Tools, Python 3 và mạng cho lần tải dependency/model đầu tiên. `ui.sh` cài `websockets==15.0.1` vào `.venv` nếu thiếu.
+STT and TTS run inside the server process; Sherpa ONNX and KorvaTTS share the ONNX
+Runtime dylib in `build/lib/`. The translation router is the Rust binary
+`build/onplay-translation`. KorvaTTS
+assets come from the Hugging Face cache (`models--dogenthq--KorvaTTS`); if they or the
+runtime are missing, the server starts without speech and sessions with
+`speech: true` receive `audio_error`.
 
-### File lớn bắt đầu như thế nào?
+Settings: `ONPLAY_PUBLIC_ORIGIN` (comma-separated extra allowed `Origin` values; the
+default allows only `http://127.0.0.1:8765`), `ONPLAY_TRANSLATE_URL` (default
+`http://127.0.0.1:5002`), `ONPLAY_SESSION_DIR` (default `sessions/`),
+`ONPLAY_CAPTURE_AUDIO` (for every session: `0` nothing, the default; `1` transcript
+and PCM; `2` transcript; `3` PCM; other values stop the server), `ONPLAY_LOG`
+(`1` prints one stdout line when a connection is refused, opens, starts and ends: client
+address, `Origin`, `User-Agent`, languages, outcome, audio seconds and segment count;
+never audio or text; off by default), `ONPLAY_ROOT`
+and `ORT_DYLIB_PATH` (defaults derived from the binary location in `build/`).
 
-Trình duyệt đọc file gốc qua Blob và giải mã audio tăng dần, AudioWorklet chuyển thành PCM16 mono 16 kHz rồi gửi từng chunk nhỏ qua WebSocket loopback. Core C++ đọc stdin, giữ encoder state và trả partial ngay khi có. Không upload cả MP4, không chờ giải mã xong video. The optional speaker pass temporarily saves decoded PCM locally; streaming STT remains unlimited, while the speaker preview is limited to 10 minutes.
+### HTTPS origin
 
-Chỉ cần thời gian mở metadata/codec của file và nạp model (mẫu trên Mac khoảng 1,3 giây). Khả năng mở MP4 tùy codec được trình duyệt hỗ trợ. Đã thử một MP4 kiểm thử 1.800.000.000 byte có audio ngắn và free-space padding: mở, phát và nhận dạng được mà không upload. Đây chưa phải benchmark video dài thực tế.
+Behind the `stt.qiverse.top` tunnel, allow the public origin explicitly and keep the
+variable on every restart; without it, connections that send that origin get 403:
 
-- Partial hiển thị ngay trong ô chính và có thể được model sửa lại; chỉ nối các đoạn final.
-- Phổ trực tiếp được dựng từ chính các chunk đang phát, cửa sổ khoảng 60 giây với chunk 100 ms. File nhỏ còn có phổ tổng quan trước khi chạy; file lớn không được giải mã toàn bộ vào RAM trình duyệt.
-- Chỉnh CPU threads và nhịp chunk trước khi chạy. Nhịp chunk đầu vào không thay chunk nội bộ đã export trong model.
-- Bỏ chọn **Nghe âm thanh khi nhận dạng** chỉ tắt tiếng loa qua GainNode, vẫn nhận dạng PCM bình thường.
-- **Dừng nhận dạng** hủy socket/engine và giữ chữ đã có. Tạm dừng player sẽ tạm dừng cấp PCM.
-- Tải hoặc sao chép bản chép lời sau khi hoàn tất.
+```sh
+ONPLAY_PUBLIC_ORIGIN=https://stt.qiverse.top ./scripts/server.sh
+```
 
-HTTP chỉ phục vụ giao diện trên 127.0.0.1:8765, WebSocket trên 127.0.0.1:8766 có kiểm tra Origin. The mobile WAV upload API is documented below. Một phiên inference mỗi lúc.
+The tunnel must route `/ws` to `127.0.0.1:8766`. Do not use an unrestricted origin
+policy. Clients must send an allowed `Origin` header.
+
+With `ONPLAY_LOG=1` the client address is the tunnel's `CF-Connecting-IP` header (else
+the first `X-Forwarded-For` address, else the TCP peer). These headers and `User-Agent`
+are logged as sent and are not verified; the protocol carries no device name.
+
+### Đóng gói binary native
+
+```sh
+./scripts/package-native.sh
+```
+
+Tạo `dist/onplay-native-macos-arm64.tar.gz` (kèm file `.sha256`) chứa `onplay-stt`, `onplay-speakers`, `onplay-recognize`, `onplay-server`, `onplay-translation` và `lib/` (Sherpa ONNX, ONNX Runtime). Binary tìm dylib qua `@loader_path/lib` nên chạy được ở thư mục khác; `onplay-server` ở ngoài checkout cần `ONPLAY_ROOT` trỏ tới thư mục có `models/`. Archive chưa được ký Developer ID hay notarize; không gồm model hay Python runtime.
 
 ## CLI và core
 
@@ -56,38 +70,178 @@ HTTP chỉ phục vụ giao diện trên 127.0.0.1:8765, WebSocket trên 127.0.0
 ./scripts/run.sh models/vi.wav --realtime --threads=2 --chunk-ms=100
 ```
 
-CLI đọc WAV mono PCM16 16 kHz tăng dần, hỗ trợ PCM thường và WAVE_FORMAT_EXTENSIBLE PCM16. Dùng `-` thay tên WAV để nhận raw PCM16 little endian 16 kHz từ stdin. CLI mặc định chạy nhanh nhất; `--realtime` chỉ dành cho benchmark file WAV theo thời gian thực. Giao diện dùng nhịp phát audio của trình duyệt.
+CLI đọc WAV mono PCM16 16 kHz tăng dần, hỗ trợ PCM thường và WAVE_FORMAT_EXTENSIBLE PCM16. Dùng `-` thay tên WAV để nhận raw PCM16 little endian 16 kHz từ stdin. CLI mặc định chạy nhanh nhất; `--realtime` chỉ dành cho benchmark file WAV theo thời gian thực.
 
-- `include/onplay/stt.hpp`: C++ API `acceptAudio()` / `finish()`, callback transcript.
-- `include/onplay/wave_reader.hpp`: đọc WAV theo chunk, không giữ toàn bộ file trong RAM.
-- `src/stt.cpp`: RAII model/stream, incremental decode, endpoint/reset, flush cuối phiên.
-- `src/main.cpp`: CLI WAV/stdin, partial/final, progress và benchmark.
-- `ui/live.mjs`, `ui/pcm-worklet.js`: native media decoding → PCM chunks.
-- `ui/ws_stream.py`: bounded PCM bridge đến C++, dừng process khi ngắt kết nối.
+- `rust/crates/onplay-stt/src/streaming.rs`: `Engine` / `Session` với `accept_audio()` / `finish()`, listener transcript.
+- `rust/crates/onplay-stt/src/wave.rs`: đọc WAV theo chunk, không giữ toàn bộ file trong RAM.
+- `rust/crates/onplay-stt/src/utterance.rs`, `diarize.rs`: nhận dạng cả câu, phân đoạn người nói + STT từng lượt.
+- `rust/crates/onplay-stt-cli/src/bin/`: `onplay-stt` (WAV/stdin, partial/final, progress, benchmark), `onplay-recognize`, `onplay-speakers`.
+- `rust/crates/onplay-sherpa` (+ `-sys`): binding bindgen từ `c-api.h` đã ghim và wrapper an toàn giải phóng handle trong `Drop`; là crate duy nhất có `unsafe`.
+- `rust/crates/onplay-server`: WebSocket server; one recognition thread per session owns the native engine.
 
 Core nhận float PCM mono 16 kHz trong [-1,1], tối đa một giây mỗi lần gọi. Chỉ gọi từ một worker thread; callback đồng bộ, không re-enter engine hoặc gọi inference trên UI/audio callback. `finish()` idempotent, sau đó tạo session mới.
 
-CMake với SDK sherpa-onnx của nền tảng có `include/` và `lib/`:
+`./scripts/build.sh` builds the Rust tools and `onplay-server` with `cargo` and places
+them in `build/` with `build/lib/*.dylib` (`@loader_path/lib` rpath). The three STT
+tools keep the command lines, stdout/stderr lines and pipe protocol of the earlier C++
+tools. On this Mac their stdout was byte-identical to the C++ binaries for WAV and
+stdin streaming (with and without live speaker labels and low latency), offline
+diarization of a 3:50 clip, the `onplay-recognize` pipe protocol and eight error
+cases. The C++ sources have been removed. The server does not use these tools; it
+calls the same `onplay-stt` library in process.
+
+Chưa có AAR/XCFramework, micro, training pipeline hay LID trả mã ngôn ngữ. Speaker diarization is experimental.
+
+## Video translation (offline)
+
+`scripts/dub-video.sh` runs the Rust `onplay-dub` pipeline (needs `cargo`): diarized
+STT, per-segment translation, SRT files and dubbed speech muxed back into an MP4.
+It needs no Python.
 
 ```sh
-cmake -S . -B build/cmake -DCMAKE_BUILD_TYPE=Release -DSHERPA_ONNX_ROOT=/absolute/path/to/sherpa-sdk
-cmake --build build/cmake
+./scripts/dev/translation.sh        # in another terminal; the router must be running
+./scripts/dub-video.sh input.mp4 --target vi
+./scripts/dub-video.sh input.mp4 --target fr --subtitles-only
+./scripts/dub-video.sh 'https://www.youtube.com/watch?v=...' --target vi   # needs yt-dlp
 ```
 
-CMake chưa kiểm tra trên máy này vì chưa cài; build clang++ đã qua. Chưa có AAR/XCFramework, micro, training pipeline, LID trả mã ngôn ngữ or live speaker labels. Offline speaker diarization is available as an experimental UI option.
+It prints the output paths: `<name>.<target>.mp4` with a soft `mov_text` subtitle
+track, `<name>.<target>.srt` and `<name>.original.srt`, next to the input or
+`--output path.mp4`. Each translated segment gets a per-speaker KorvaTTS voice. The
+speed is chosen from the predicted duration (at most 2x) so speech fits before the
+next segment, and the dub is mixed over the original audio, which is lowered to
+`--background` (default 0.15) only while dubbed speech plays. Segments already in the
+target language keep their original audio. All-capital STT text is sentence-cased
+before translation, because the translation models garble capitals.
+
+Stages overlap: segments are translated as `onplay-speakers` prints them and queued
+to `--tts-workers` in-process synthesizers (default 3, `--tts-threads` 2 each) while
+recognition continues. On an Apple M4 (4 performance + 6 efficiency cores), a 3:50
+two-speaker English clip dubbed to Vietnamese took 78.6 s with sequential stages and
+54-58 s with this pipeline. Diarization was fastest at 4 threads (26 s versus 35-52 s
+at 6-10), so `--threads` stays at 4. Per-process CPU time during a run was about 50%
+TTS, 49% `onplay-speakers`, 1% ffmpeg; the earlier Python orchestration of the same
+pipeline used 0.3% and ran equally fast (54.1/58.5 s against 54.3/57.1 s for Rust),
+with identical SRT output.
+
+The library reports progress only through an optional `onplay_dub::Observer`
+(`events.rs`); it does not log. The CLI attaches no observer.
+
+Limits: speech output supports Vietnamese and English only; other targets need
+`--subtitles-only`. Audio is diarized in 590-second pieces, so speaker voices may
+change between pieces. Subtitles are not burned in (the Homebrew ffmpeg checked
+here has no libass). Only use videos you have the right to translate.
+
+## Rust workspace
+
+`rust/` is a Cargo workspace with the STT engine and tools, the streaming server, the
+video translation pipeline above and a Rust reimplementation of KorvaTTS 0.1.3 inference. The TTS reads the published KorvaTTS assets (`~/.cache/huggingface/hub/models--dogenthq--KorvaTTS`,
+Apache-2.0) without modifying them or the Python package, and loads the ONNX Runtime
+dylib from the Sherpa ONNX SDK in `.deps/` (`ort` with `load-dynamic`).
+
+```sh
+./scripts/tts-rust.sh --text 'Xin chào' --voice khanh_vy --steps 8 --output out.wav
+./scripts/tts-rust.sh --list-voices
+echo '{"text":"Xin chào","lang":"vi","voice":"khanh_vy","output":"/tmp/a.wav","max_seconds":1.0}' \
+  | ./scripts/tts-rust.sh --batch --steps 8
+```
+
+`--batch` keeps the models loaded and answers one JSON line per request.
+`max_seconds` raises the speed, up to 2x, so the predicted speech fits, without a
+second synthesis pass.
+
+`--device` accepts `cpu` (default), `coreml`, `coreml-gpu` and `coreml-ane`. On the
+M4, five Vietnamese sentences (24.7 s of audio, 8 steps) took 3.6 s on the CPU with
+default threads (RTF 0.147), 3.9-5.8 s with 2, 4 or 10 threads, and 4.4-6.8 s with
+CoreML after 4-13 s of model compilation, because CoreML accepts only part of each
+graph. The MLProgram CoreML format failed to build these graphs.
+
+```
+rust/
+├── Cargo.toml                    workspace, shared dependency versions and lints
+└── crates/
+    ├── onplay-tts/               library
+    │   ├── src/
+    │   │   ├── assets/           asset directory, tts.json config, JSON reading
+    │   │   ├── text/             normalization, chunking, language tags, indexer
+    │   │   ├── runtime/          ONNX Runtime init, device selection, typed graph calls
+    │   │   ├── synth/            pipeline, duration fitting, initial latent, noise
+    │   │   ├── audio/            tail cleanup, PCM16 WAV output
+    │   │   ├── tensor.rs         buffers shared by runtime and synth
+    │   │   ├── voice.rs          voice style loading
+    │   │   └── error.rs
+    │   └── tests/                Python-generated text parity fixture and test
+    ├── onplay-tts-cli/           `onplay-tts` binary (args, batch mode, noise replay)
+    ├── onplay-dub/               video translation library
+    │   └── src/
+    │       ├── pipeline.rs       options, stage overlap, output naming
+    │       ├── fetch.rs          local file or yt-dlp download
+    │       ├── media.rs          ffmpeg extract, cut, duck-and-mix mux
+    │       ├── recognize.rs      streamed onplay-speakers segments
+    │       ├── translate.rs      translation router client, sentence casing
+    │       ├── speech.rs         parallel in-process synthesizers
+    │       ├── timeline.rs       clip placement on the dub track
+    │       ├── srt.rs, voices.rs, segment.rs
+    │       ├── events.rs         optional observer, no logging
+    │       ├── project.rs        checkout paths, embedding checksum
+    │       ├── workdir.rs        temp directory removed on drop
+    │       └── command.rs, error.rs
+    ├── onplay-dub-cli/           `onplay-dub` binary used by dub-video.sh
+    ├── onplay-server/            streaming WebSocket server library
+    │   └── src/
+    │       ├── socket/           listener and origin check, connection I/O, options, outbox
+    │       ├── pipeline/         recognition thread, diarization, translation and speech lanes
+    │       ├── translation/      router client, busy retry
+    │       ├── speech/           shared in-process KorvaTTS, voices
+    │       ├── sessions/         opt-in transcript store, capture WAV, context pass
+    │       └── config.rs, engine_lock.rs, languages.rs, models.rs, numbers.rs
+    ├── onplay-server-cli/        `onplay-server` binary used by server.sh
+    ├── onplay-translation/       translation router library
+    │   └── src/
+    │       ├── engine.rs         lanes, routing, cache lookup, fallback, line/placeholder translation
+    │       ├── request.rs        /translate body validation
+    │       ├── config.rs         config/translation.yaml and its rules
+    │       ├── models/           CTranslate2 OPUS and NLLB, candle Qwen3, lazy loading
+    │       ├── text/             normalization, Python whitespace rules, placeholders
+    │       ├── detect.rs         Lingua source detection
+    │       └── cache.rs, metrics.rs, language.rs, error.rs
+    ├── onplay-translation-cli/   `onplay-translation` binary (HTTP on 127.0.0.1:5002)
+    ├── onplay-translation-bench/ router benchmark library
+    │   └── src/
+    │       ├── corpus.rs         unique segments from sessions/*.jsonl
+    │       ├── router.rs         router child process, killed with its group
+    │       ├── client.rs         /health and /translate over HTTP
+    │       ├── run.rs, memory.rs per-run requests, process-tree RSS sampling
+    │       ├── report.rs, stats.rs, compare.rs
+    │       └── events.rs, error.rs
+    └── onplay-translation-bench-cli/ `onplay-translation-bench` binary
+```
+
+Verification run on this Mac:
+
+- `cargo test` in `rust/`: unit tests plus `tests/text_parity.rs`, which compares
+  normalization and chunking with a fixture produced once from Python korvatts 0.1.3
+  (`tests/fixtures/text_parity.json`; its generator script was removed).
+- A waveform comparison with Python KorvaTTS (same text, voice and replayed noise on
+  CPU; the script has since been removed): Vietnamese and English outputs had equal
+  length, max absolute difference 0.00015 and correlation 1.000000.
+- One 9.3-second Vietnamese sentence at 8 steps took about 2.4 s end to end in Rust,
+  similar to Python (1.3 s load + 1.0 s synthesis).
+
+Not done yet: `onplay-dub` runs STT through the `onplay-speakers` binary as a
+subprocess. The translation router is Rust; its comparison with the former Python
+router is in [docs/translation-benchmark.md](docs/translation-benchmark.md).
 
 ## Kiểm tra
 
 ```sh
-./scripts/test.sh
-python3 tests/wave_reader.py
-node tests/spectrum.mjs
-# Khi UI server đang chạy, không có phiên khác:
-.venv/bin/python tests/live_stream.py
-.venv/bin/python tests/ui_smoke.py
+./scripts/dev/test.sh
 ```
 
-Test gồm inference thật Anh/Việt và chuyển giữa hai câu, lifecycle/silence/PCM validation với ASan/UBSan cho code dự án, WAV lớn/truncated, FFT và streaming qua stdin/socket. Test socket xác minh nhận partial khi nguồn PCM vẫn mở, trước end-of-stream. Chưa đo WER/CER, RAM/pin/nhiệt trên Android/iOS hoặc video dài.
+`test.sh` builds, then runs every Rust test including the real-model ones:
+`onplay-stt/tests/session.rs`, `onplay-stt-cli/tests/cli.rs` (CLI tools) and
+`onplay-server-cli/tests/socket.rs`, which starts a fresh `build/onplay-server`
+(port 8766 must be free). Test gồm inference thật Anh/Việt và chuyển giữa hai câu, lifecycle/silence/PCM validation, WAV lớn/truncated (test Rust) và streaming qua stdin/socket. Test socket xác minh nhận partial khi nguồn PCM vẫn mở, trước end-of-stream. Chưa đo WER/CER, RAM/pin/nhiệt trên Android/iOS hoặc video dài.
 
 ## Model và nguồn
 
@@ -102,37 +256,32 @@ Trọng số và runtime là thành phần bên thứ ba; giữ các license đi
 ## Experimental speaker diarization
 
 ```sh
-./scripts/setup-speakers.sh
-./scripts/build.sh
-./scripts/ui.sh
-# In another terminal, with websockets installed in .venv:
-.venv/bin/python tests/speakers.py
+./scripts/setup/speakers.sh
+./scripts/dev/build.sh
+# Starts its own build/onplay-server; stop any running server first.
+cargo test --release --manifest-path rust/Cargo.toml -p onplay-server-cli -- --include-ignored
 ```
 
-Enable **Phân biệt người nói** before starting. Streaming partials and finals now
-include provisional session-local speaker labels. The CAM++ embedding model
-compares the most recent four seconds, refreshing after roughly two seconds of
-audio with changing recognized text. Until enough audio is available, the UI
-shows that it is still identifying the speaker. This bounded live path also runs
-on recordings longer than 10 minutes. Its labels are approximate: one ASR
-utterance may contain multiple voices, and rapid or overlapping turns can be
-misassigned. The bridge checks the pinned embedding checksum before enabling it.
-After playback ends, `onplay-speakers` runs local offline segmentation and speaker
-clustering, then transcribes each detected turn with the existing STT model.
-The result includes timestamps and session-local labels such as `Người 1`.
-Expand **Bản chữ gốc** to compare against the first streaming transcript; neither
-pass is guaranteed to have better word accuracy. Copy/download uses the displayed
-speaker transcript. The processing time and RTF include the extra pass.
+Send `speakers: true` (or `"live"`) in the session options. Streaming partials and
+finals then include provisional session-local speaker labels. The CAM++ embedding
+model compares the most recent four seconds, refreshing after roughly two seconds of
+audio with changing recognized text; until enough audio is available the label is 0.
+This bounded live path also runs on recordings longer than 10 minutes. Its labels are
+approximate: one ASR utterance may contain multiple voices, and rapid or overlapping
+turns can be misassigned. The server checks the pinned embedding checksum before
+enabling it. With `speakers: true`, after the input ends the server runs local
+offline segmentation and speaker clustering on the received audio, then transcribes
+each detected turn with the existing STT model, and sends a `speakers` event with
+timestamps and labels starting at 1. Neither pass is guaranteed to have better word
+accuracy. The processing time and RTF in `done` include the extra pass.
 
-This preview saves mono PCM16 at 16 kHz in a temporary local WAV, deleted on
-completion, cancellation or handled failure. It never uploads the original file.
-The offline pass loads audio into RAM and is capped at 10 minutes (about 19.2 MB
-of temporary PCM plus model and inference memory). Longer recordings skip only the offline pass and retain live labels. Missing or
-invalid embedding models fall back to ordinary text with a warning. Failed
-offline diarization retains the streaming transcript.
-Stopping during the extra pass preserves the original text. Labels do not identify
-real names and reset every run. Short turns, noise and simultaneous voices can
-produce incorrect labels or words; overlapping turns can transcribe mixed voices.
+The offline pass keeps the received PCM in server memory (at most 10 minutes, about
+19.2 MB, plus model and inference memory); longer recordings skip only the offline
+pass and retain live labels. Missing or invalid embedding models fall back to
+ordinary text with a warning. Failed offline diarization retains the streaming
+transcript. Closing the connection during the extra pass stops it after the current
+turn. Labels do not identify real names and reset every session. Short turns, noise
+and simultaneous voices can produce incorrect labels or words.
 
 Model assets remain ignored under `models/speakers/`. The setup script pins SHA256:
 
@@ -142,166 +291,55 @@ Model assets remain ignored under `models/speakers/`. The setup script pins SHA2
 | [3D-Speaker CAM++ embedding](https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh-cn_16k-common.onnx) | `f682b514c05d947ee3fa91cd6ec6c5c7543479a128373fa29b1faedccd21fd11` | [Apache-2.0 project license](https://github.com/modelscope/3D-Speaker/blob/main/LICENSE) |
 
 CLI live labels: `./scripts/run.sh models/vi.wav --speaker-model=models/speakers/embedding.onnx`.
-The optional `ModelConfig.speaker_model` enables this path; `Transcript.speaker`
-is zero when unknown/disabled, otherwise a provisional positive label. Existing
-CLI output is unchanged unless `--speaker-model` is supplied.
+`EngineConfig.speaker_model` enables this path; `Transcript.speaker` is zero when
+unknown/disabled, otherwise a provisional positive label. CLI output is unchanged
+unless `--speaker-model` is supplied.
 
 The runtime uses the archive's `model.int8.onnx` segmentation file and CAM++ with
-CPU inference, automatic speaker count and clustering threshold 0.5. Tests use
-real model inference on Vietnamese/English/Vietnamese samples, check two distinct
-labels and label reuse, silence, disabled mode, missing assets, duration fallback
-and cancellation. These synthetic checks are not a diarization error-rate or
-Vietnamese conversation benchmark.
-
-## Hiệu năng trên cùng trang STT
-
-Trang chính có bảng CPU, RAM máy, RAM RSS engine C++ và lưu trữ, tự cập nhật mỗi 2 giây. Mở **Chi tiết tiến trình, biểu đồ và dung lượng model** để xem CPU/RAM từng tiến trình, đỉnh RSS quan sát, luồng OS, CPU time, swap và I/O đĩa. Monitor dùng `psutil==7.2.2`, phục vụ ở loopback 8767 và được nhúng vào trang 8765. `ui/server.py` tự khởi động monitor nếu cổng này chưa được dùng; có thể chạy riêng bằng `.venv/bin/python ui/metrics.py` để theo dõi mà không ngắt session đang chạy.
-
-CPU tiến trình 100% tương đương một lõi; CPU toàn máy chuẩn hóa trên tất cả lõi. CPU/RAM trình duyệt chưa được tách riêng; chưa đo GPU, nhiệt độ hoặc điện năng. Kiểm tra số đo/API: `.venv/bin/python tests/metrics.py`.
-
-
-## HTTPS streaming origin
-
-When serving the UI through the existing `stt.qiverse.top` tunnel, start or
-restart the server with the public browser origin explicitly allowed:
-
-```sh
-ONPLAY_PUBLIC_ORIGIN=https://stt.qiverse.top ./scripts/ui.sh
-```
-
-Keep this environment variable on every restart. Without it, local HTTP still
-works, but browser WebSocket connections from the HTTPS site are rejected.
-The HTTPS tunnel must route `/ws` to `127.0.0.1:8766`; other UI/API paths use
-`127.0.0.1:8765`. Additional allowed origins can be comma-separated; do not use
-an unrestricted origin policy.
-
-## Mobile HTTPS POST API
-
-`POST https://stt.qiverse.top/api/transcribe` accepts a raw WAV body with
-`Content-Type: audio/wav` and `Content-Length`. Use PCM signed 16-bit
-little-endian, mono, 16 kHz, up to 60 seconds and 2 MiB. Multipart, compressed
-audio and chunked transfer encoding are unsupported.
-
-```sh
-curl --fail-with-body https://stt.qiverse.top/api/transcribe \
-  -H 'Content-Type: audio/wav' --data-binary @audio.wav
-```
-
-Success: `{"type":"speakers","segments":[{"start":0.5,"end":2.8,"speaker":0,"text":"recognized transcript"}]}`.
-Times are seconds from the start of the audio; speaker IDs start at zero and
-are local to each request. Silence returns an empty `segments` array. Errors return `{"error":"..."}`:
-400 invalid length/framing, 408 upload timeout, 409 engine busy, 413 size limit,
-415 content type, 422 invalid WAV/format/duration, 500 engine failure,
-503 missing/invalid speaker models, 504 inference timeout (90 seconds). Only one inference runs at a time, shared
-with WebSocket sessions. Uploads use temporary files deleted after processing.
-This endpoint currently has no authentication. The browser UI still streams PCM.
-
-## Audio in → translated audio out
-
-Send the source WAV and target language in one request:
-
-```sh
-curl --fail-with-body 'http://127.0.0.1:8765/api/translate-audio?target=en' \
-  -H 'Content-Type: audio/wav' \
-  --data-binary @models/vi.wav \
-  --output translated-en.wav
-```
-
-The server reuses a resident STT model with a fresh recognition stream per request,
-then translates the transcript and synthesizes one WAV in the target language.
-This route skips speaker segmentation; `/api/transcribe` still returns speaker segments.
-The client only uploads audio and saves/plays the response.
-Input: PCM16 mono 16 kHz WAV, up to
-60 seconds / 2 MiB. Output: PCM16 mono 44,100 Hz WAV, using KorvaTTS locally.
-Silence returns HTTP 204 without audio. Source speaker voices, pauses
-and timing are not reproduced. Translation output over 3,000 characters returns
-422; send shorter audio. Start the translation router (`./scripts/translation.sh`)
-and restart the UI/API server (`./scripts/ui.sh`) before use.
-The server warms the STT and KorvaTTS models at startup; KorvaTTS assets download
-on first run and are cached locally.
-`Server-Timing` reports `stt`,
-`translate` and `tts` durations in milliseconds on successful requests.
-These timings exclude upload and download. The first TTS request can be slower;
-subsecond processing is not guaranteed for every clip or translation pair.
-
-See [the one-request API contract](docs/translation-api.md#audio-to-translated-audio)
-for limits and errors. `.venv/bin/python tests/audio_translation.py` checks the
-HTTP composition and failures using stubbed inference/translation/synthesis.
-`.venv/bin/python tests/recognition.py` checks real-model worker reuse, isolated
-streams, invalid framing, timeout cleanup and recovery after worker failure.
-
-## Translated speech audio
-
-After translation, click **Tạo audio bản dịch** to generate server-side speech,
-then use the audio player or **Tải audio .wav**. Enable **Nghe âm thanh khi dịch** beside the original-audio toggle to generate
-and play each new live translation sequentially. It is off by default. Refined
-translations at the end of playback are displayed without repeating speech.
-Unchecking the option, stopping, changing the target or starting again cancels
-queued audio. Manual transcript translation is also read when enabled.
-The queue holds at most 32 segments; failures or overflow stop automatic speech
-and keep the translated text. Browser autoplay restrictions may require manual
-playback. Original audio and translated speech have independent toggles.
-
-`POST /api/tts` accepts `{"text":"Hello","language":"en"}` and returns
-`audio/wav` (mono PCM16, 44,100 Hz). Send the translated text and its target
-language. The backend uses KorvaTTS locally with the `khanh_vy` voice for
-Vietnamese and English. KorvaTTS weights are downloaded on first use and cached
-locally; English quality is not guaranteed to match Vietnamese. It does not
-preserve the original speaker's voice or timing. Other target languages can be
-translated, but speech synthesis currently supports only Vietnamese and English.
-
-Requests are limited to 3,000 characters and 32 KiB JSON, with one synthesis at a
-time. No persistent audio URL is created. See [the API guide](docs/translation-api.md#translated-speech-audio)
-for client integration. Run `.venv/bin/python tests/tts.py` for HTTP/validation
-checks; set `ONPLAY_TEST_REAL_TTS=1` to also generate real Vietnamese/English WAVs.
+CPU inference, automatic speaker count and clustering threshold 0.5. `onplay-server-cli/tests/socket.rs`
+uses real model inference on Vietnamese/English/Vietnamese samples and checks two
+distinct labels and label reuse, live-only mode, silence, disabled mode, cancellation
+and the native duration bound. These synthetic checks are not a diarization
+error-rate or Vietnamese conversation benchmark.
 
 ## Low-latency live translation
 
-WebSocket sessions with a translation target enable `--low-latency` on the
-streaming recognizer: finalize after approximately six seconds of utterance audio,
-or 0.7 seconds of trailing silence after speech. Recognition-only sessions keep
+WebSocket sessions with a translation target enable low-latency endpointing on the
+streaming recognizer: finalize after 0.45 seconds of trailing silence after speech,
+usually a pause between sentences, or after approximately twelve seconds of
+utterance audio. Recognition-only sessions keep
 the existing 20-second / 1.2-second settings. Short final segments are sent to the
 translation worker immediately. The model's decoding/lookahead, translation,
 network, synthesis and playback queue add latency; these thresholds are not an
-end-to-end latency guarantee. The six-second limit can still split sentence
-context and reduce recognition/translation quality. No partial hypotheses are spoken.
+end-to-end latency guarantee. Speech without pauses can still reach the
+twelve-second limit and be split mid-sentence, which reduces translation quality.
+On one synthesized 30-second Vietnamese paragraph, the previous 6-second / 0.7-second
+settings cut every sentence mid-clause, while these settings matched sentence
+boundaries except for one leading word; real recordings have not been evaluated. No partial hypotheses are spoken.
 
-## Transcript translation
+## Live translation
 
-The UI offers a target-language selector (translation is off by default), a
-separate translation panel, and copy/download actions. When a target is selected,
-the browser sends `target_language` in the initial WebSocket configuration.
-The server sends original `final` events immediately and translates their text
-on a separate worker, then sends `translation` events over the same socket.
-Recognition continues while translation is pending; partial hypotheses are not
-translated. No HTTP translation requests are made during live recognition.
-Speaker refinement sends a new `speakers` list followed by its translations.
-The manual **Dịch bản chữ hiện tại** action still uses `/api/translate` to
-translate edited text. Original text and completed translations remain available
-on a translation failure. Stopping closes the socket and discards queued work;
-an already running provider request can take up to its 60-second timeout to end.
-Each translation accepts up to 10,000 characters.
-
-WebSocket translation is optional: omit `target_language` or send `""` for
-recognition only. Example initial configuration:
+Translation is optional: send `target_language` in the session options, or omit it
+(or send `""`) for recognition only. Example:
 
 ```json
 {"threads":2,"chunk":100,"speakers":true,"target_language":"vi"}
 ```
 
-Each streaming `final` has an integer `id` starting at zero. A translation event
-contains `type: "translation"`, the same `id`, `revision: "live"`,
-`source: {"text": "…"}` and `translation: {"text": "…", "language": "vi"}`.
-A refined `speakers` list has its own zero-based segment IDs; translations use
-`revision: "refined"`. Consumers must match both revision and ID, and ignore late
-live translations after refinement. Speaker labels are included when available;
-`start`/`end` are included for refined segments, not invented for streaming finals.
-Existing WebSocket speaker labels start at 1; the POST API remains unchanged.
-`translation_error` reports provider errors or a full queue (64 pending segments);
-recognition continues and translation stops for that session. `done` is sent after
-pending translations finish or are skipped following an error. Translation time
-is not included in STT processing metrics. Configured provider languages still
-control which targets work.
+The server sends `final` events immediately and translates their text on a separate
+worker, then sends `translation` events over the same socket; recognition continues
+while translation is pending. The newest partial is also translated (`revision:
+"provisional"`) while the fast lane is idle. Each `final` has an integer `id`
+starting at zero; translations carry the same `id` and a `revision`. Speaker
+refinement sends a `speakers` list with its own zero-based IDs, translated with
+`revision: "refined"`; `translation_mode: "context"` adds `revision: "context"`
+retranslations with previous sentences as context. Consumers must match both
+revision and ID. `translation_error` reports provider errors or a full queue (64
+pending segments); recognition continues and translation stops for that session.
+`done` is sent after pending translations finish or are skipped following an error.
+Closing the connection discards queued work; an already running router request can
+take up to its 60-second timeout to end. Each translation accepts up to 10,000
+characters. Details: [docs/streaming-audio.md](docs/streaming-audio.md).
 
 ### Local translation router
 
@@ -309,7 +347,7 @@ The default translation endpoint is the local router at `127.0.0.1:5002`.
 It normalizes NFC Unicode/whitespace while preserving line boundaries, resolves
 source metadata (or detects language using Lingua), selects a configured model,
 validates output/placeholders, and keeps a bounded in-memory LRU cache.
-The router supports the twelve ISO 639-1 languages offered by the UI, rather than
+The router supports twelve ISO 639-1 languages (`vi en zh ja ko th id ru ar fr de es`), rather than
 exposing every language the underlying NLLB model supports.
 
 `config/translation.yaml` now defaults to native INT8 CTranslate2 NLLB.
@@ -319,48 +357,48 @@ as fallback. These are latency-oriented routes over existing model weights,
 not claims that OPUS won a semantic quality benchmark. Qwen3-1.7B remains an
 explicit slow context mode and falls back to native NLLB.
 
-The browser's live recognition always requests `standard` mode. The context-mode
-selector applies only to manually translating the transcript again. This keeps
-Qwen outside the live translation path; Qwen cannot meet the 500 ms target on
-this setup.
+Live finals always use `standard` mode; `context` mode only adds the separate
+refinement lane and the stored-session context pass. This keeps Qwen outside the
+live translation path; Qwen cannot meet the 500 ms target on this setup.
 
-Install and prepare the isolated Python 3.12 runtime and local model assets:
+Download the model assets, then convert NLLB to CTranslate2 INT8 once. The
+conversion is the only step that still uses Python (`ct2-transformers-converter`
+from the `ctranslate2` package in `.deps/python`); the router itself does not:
 
 ```sh
-python3.12 -m venv .deps/translation-venv
-.deps/translation-venv/bin/python -m pip install -r ui/translation-requirements.txt
-.deps/translation-venv/bin/python scripts/setup-translation.py
-.deps/translation-venv/bin/python scripts/setup-fast-translation.py
-.deps/translation-venv/bin/ct2-transformers-converter --model models/translation/nllb-200 --output_dir models/translation/nllb-200-ct2 --quantization int8
+./scripts/setup/translation.sh
+./scripts/setup/python.sh
+.deps/python/bin/ct2-transformers-converter --model models/translation/nllb-200 --output_dir models/translation/nllb-200-ct2 --quantization int8
 ```
 
-Run conversion once for a new output directory. OPUS setup verifies the installed
-weight SHA-256 against the recorded upstream model hashes. Assets stay under
+Run conversion once for a new output directory. `setup/translation.sh` verifies
+the SHA-256 of every downloaded Hugging Face file, Argos package and installed OPUS
+weight. Assets stay under
 ignored `models/` and `.deps/` paths. Native inference does not require Docker.
-The old `compose.translation.yaml` service remains optional for experiments;
-it is not used by the active fast routes.
 
-Start the router in one terminal, then the STT UI in another:
+`./scripts/dev/server.sh` starts the router itself when nothing listens on 5002
+(`ONPLAY_TRANSLATION=0` skips it). To run it on its own:
 
 ```sh
-./scripts/translation.sh
-# Another terminal:
-./scripts/ui.sh
+./scripts/dev/translation.sh
 ```
+
+The router is `rust/crates/onplay-translation` (library) and
+`rust/crates/onplay-translation-cli` (`onplay-translation` binary). It links
+CTranslate2 and SentencePiece, which `./scripts/dev/build.sh` compiles from source
+with the pinned CMake from `./scripts/setup/cmake.sh`; Qwen runs on candle.
+`ONPLAY_ROOT` sets the checkout and `ONPLAY_TRANSLATION_ADDRESS` the listen address
+(default `127.0.0.1:5002`).
 
 The router preloads and warms native models and language detection before opening
 port 5002, so first-use loading is outside audio processing. Fast inference uses
 CPU INT8 with two threads and greedy decoding. Qwen is loaded lazily only for
-explicit context requests, using Apple MPS when available. The model/tokenizer
+explicit context requests, f16 on Metal when available (f32 on the CPU otherwise). The model/tokenizer
 worker is serialized; concurrent router requests return 409 instead of accumulating
 an unbounded queue. Native outputs must end normally; truncation is rejected.
 
-`POST /api/translate` keeps the `text` response and adds source/target, model,
-latency, fallback/cache and `within_budget` metadata. Source/target use twelve
-ISO 639-1 codes; the STT audio model still has its original language coverage.
-See [the HTTPS mobile guide](docs/translation-api.md) for requests, limits,
-Android/iOS configuration and segment-preserving client composition. The original
-`POST /api/transcribe` contract is unchanged.
+Translation results are forwarded to clients with source/target, model, latency,
+fallback/cache metadata and the server's `queue_ms`, `total_ms` and `within_budget`.
 
 NFC/whitespace normalization preserves line boundaries. Literal placeholders are
 held outside inference and stitched back into translated fragments; this may
@@ -371,36 +409,28 @@ segments. No transcript text is included in aggregate metrics or router logs.
 `GET http://127.0.0.1:5002/metrics` reports requests, cache hits, errors, fallback,
 model usage, placeholder failures and requests over 500 ms. The client still has
 a 60-second transport timeout, which is not a processing-latency promise. A native
-generation can continue after its client times out. The local latency check is:
+generation can continue after its client times out.
 
-```sh
-.venv/bin/python tests/translation_latency.py
-```
-
-The 2026-11-02 run measured 25 uncached HTTP requests: p50 53.56 ms, p95 283.94 ms,
-maximum 377.64 ms. This is coverage of the benchmark inputs, not a hard upper bound
-for arbitrary text, host contention or mobile network latency. Long segments can
-exceed 500 ms; `within_budget` reports the actual result rather than hiding it.
-Quality still requires a separate representative human-reviewed evaluation.
+The 2026-11-02 run measured 25 uncached requests through the former HTTP API: p50
+53.56 ms, p95 283.94 ms, maximum 377.64 ms. That latency check was removed with the
+HTTP API. This is coverage of the benchmark inputs, not a hard upper bound for
+arbitrary text, host contention or mobile network latency. Long segments can exceed
+500 ms; `within_budget` reports the actual result rather than hiding it. Quality still
+requires a separate representative human-reviewed evaluation.
 
 **Model limitations:** NLLB uses CC-BY-NC-4.0 and its model card limits intended
 use to research, excluding production deployment. This default is for local
 experiments, not a production/mobile release recommendation. Qwen3-1.7B is
 Apache-2.0 and is an experimental small context model, not a proven improvement.
-See [API/socket examples](docs/translation-api.md), [model records](docs/translation-models.md) and the
+See [model records](docs/translation-models.md) and the
 [NLLB model card](https://huggingface.co/facebook/nllb-200-distilled-600M).
 
-Run the HTTP integration checks with a local fake translation provider:
+`cargo test -p onplay-translation` checks request validation, normalization,
+placeholders, config rules, the cache and the Qwen prompt; it does not validate
+translation quality.
 
-```sh
-.venv/bin/python tests/translation_engine.py
-.venv/bin/python tests/translation.py
-.venv/bin/python tests/socket_translation.py
-node tests/translation_ui.mjs
-```
+## Speech over the socket
 
-These checks validate the API contract and failures, not translation quality.
-
-Segment speech over the existing WebSocket bridge is opt-in with `speech: true`.
-See [the mobile streaming protocol](docs/streaming-audio.md) for PCM input,
-per-segment WAV events, playback ordering and limits.
+Segment speech is opt-in with `speech: true` and a Vietnamese or English target.
+See [docs/streaming-audio.md](docs/streaming-audio.md) for per-segment WAV events,
+playback ordering and limits.

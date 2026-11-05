@@ -1,0 +1,16 @@
+[package]
+name = "onplay-translation-bench"
+description = "Black-box benchmark of translation routers on recorded ONPlay sessions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true

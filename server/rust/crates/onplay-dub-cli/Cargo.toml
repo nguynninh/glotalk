@@ -1,0 +1,17 @@
+[package]
+name = "onplay-dub-cli"
+description = "Command-line video translation with onplay-dub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "onplay-dub"
+path = "src/main.rs"
+
+[dependencies]
+onplay-dub.workspace = true
+
+[lints]
+workspace = true

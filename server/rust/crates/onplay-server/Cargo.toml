@@ -1,0 +1,21 @@
+[package]
+name = "onplay-server"
+description = "Streaming WebSocket server: in-process STT, translation router client and TTS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+base64.workspace = true
+onplay-stt.workspace = true
+onplay-tts.workspace = true
+rand.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tungstenite.workspace = true
+ureq.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "onplay-translation-bench-cli"
+description = "Command-line translation router benchmark"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "onplay-translation-bench"
+path = "src/main.rs"
+
+[dependencies]
+onplay-translation-bench.workspace = true
+
+[lints]
+workspace = true

@@ -27,10 +27,6 @@ translation:
       path: models/translation/nllb-200
       repository: facebook/nllb-200-distilled-600M
       revision: f8d333a098d19b4fd9a8b18f94170487ad3f821d
-    opus-mt:
-      backend: libretranslate
-      url: http://127.0.0.1:5001
-      languages: [en, vi, zh]
     qwen:
       backend: qwen
       path: models/translation/qwen-1.7b

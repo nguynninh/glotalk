@@ -1,0 +1,20 @@
+[package]
+name = "onplay-translation-cli"
+description = "onplay-translation: the local translation router binary (HTTP on 127.0.0.1:5002)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "onplay-translation"
+path = "src/main.rs"
+
+[dependencies]
+onplay-translation.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tiny_http.workspace = true
+
+[lints]
+workspace = true

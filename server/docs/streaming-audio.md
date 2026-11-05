@@ -1,65 +1,94 @@
-# Segment speech over WebSocket
+# Dùng ONPlay STT qua Internet
 
-This opt-in protocol extends the existing WebSocket bridge. STT accepts PCM
-incrementally; translation and speech run on separate workers. Each speech event
-contains a complete WAV for one finalized segment, not incremental TTS samples.
-The HTTP `/api/translate-audio` contract is unchanged.
+Tài liệu này dành cho ứng dụng kết nối tới dịch vụ công khai **[stt.qiverse.top](https://stt.qiverse.top)**. Đây là WebSocket để gửi âm thanh và nhận kết quả nhận dạng trực tiếp; mở địa chỉ bằng trình duyệt không tạo trang web.
 
-## Connection and input
+## Kết nối
 
-Local endpoint: `ws://127.0.0.1:8766`. Public deployments must route `/ws` to
-that port and configure `ONPLAY_PUBLIC_ORIGIN` for the client's Origin header.
-Use WSS for remote clients. Origin validation is not authentication.
+- WebSocket URL: `wss://stt.qiverse.top/ws`
+- Gửi Origin: `https://stt.qiverse.top`
+- Âm thanh đầu vào: PCM signed 16-bit little-endian, mono, 16 kHz; không gửi header WAV.
 
-Send this JSON as the first message:
+Máy chủ chấp nhận một phiên nhận dạng tại một thời điểm. Ứng dụng nên báo cho người dùng nếu nhận sự kiện `error` nói rằng engine đang bận, và cho phép thử lại sau.
 
-```json
-{"target_language":"vi","source_language":"en","speech":true,"speakers":false,"chunk":100}
-```
+## Bắt đầu phiên
 
-`speech` defaults to false and requires a supported `target_language`.
-Wait for `{"type":"ready"}`, then send binary PCM16 little-endian, mono,
-16 kHz frames. For example, 100 ms is 3,200 bytes. Each frame must be nonempty,
-even-sized and at most 32,000 bytes. Do not include WAV headers.
-Send `{"type":"end"}` to finish input; continue receiving until `done`.
-Disconnect to cancel a session. Only one inference session can run at a time,
-shared with HTTP uploads.
-
-## Output and playback
-
-Existing `partial`, `final` and `translation` JSON events remain available.
-Finals and translations carry a segment `id`. With speech enabled, live
-translations also produce JSON events shaped like:
+Sau khi mở WebSocket, gửi một JSON cấu hình làm message đầu tiên, trong vòng 10 giây. Cấu hình tối thiểu để nhận dạng tiếng nói và dịch sang tiếng Việt:
 
 ```json
-{"type":"audio","id":0,"revision":"live","language":"vi","content_type":"audio/wav","encoding":"base64","data":"...","tts_ms":120.0}
+{"source_language":"auto","target_language":"vi"}
 ```
 
-`data` is base64 of the complete WAV (PCM16 mono 44,100 Hz).
-`tts_ms` measures synthesis time, excluding queue wait and network delivery.
-Decode and play WAVs in segment order while continuing microphone upload and
-WebSocket receive on separate tasks. Interleaved transcript events are normal.
-Do not also call `/api/tts` for these translations, or speech will play twice.
-Base64 increases audio size by roughly one third; configure the client receive
-limit for audio messages (the TTS WAV size limit is 32 MiB).
+Để chỉ nhận dạng, bỏ `target_language` hoặc đặt thành chuỗi rỗng:
 
-Only `live` translations produce speech. Offline speaker refinement never
-replays revised translations. `done` follows completion of pending translation
-and speech work; it does not mean the mobile playback queue has finished.
+```json
+{"source_language":"auto"}
+```
 
-An `audio_error` disables further speech for that connection and discards queued
-speech, while transcription and translation continue. Already delivered audio
-remains valid. Restart the session to retry speech. The queue holds at most four
-waiting segments plus one active synthesis; exceeding it triggers `audio_error`.
-The existing translation queue and its errors are unchanged.
+Chờ sự kiện `{"type":"ready"}` trước khi gửi âm thanh. Các tùy chọn thường dùng:
 
-## Limits
+| Tùy chọn | Mặc định | Ý nghĩa |
+|---|---|---|
+| `source_language` | `auto` | Ngôn ngữ đầu vào: `auto`, `vi`, `en`, `zh`, `ja`, `ko`, `th`, `id`, `ru`, `ar`, `fr`, `de`, `es` |
+| `target_language` | rỗng | Ngôn ngữ dịch: các mã ở trên; rỗng để tắt dịch |
+| `translation_mode` | `standard` | `standard` hoặc `context` để tinh chỉnh bản dịch theo các câu trước |
+| `speech` | `false` | Nhận WAV đọc bản dịch; cần `target_language`, hiện hỗ trợ giọng Việt và Anh |
+| `speakers` | `false` | `true` để nhận nhãn người nói trực tiếp và phân đoạn cuối phiên; `"live"` chỉ bật nhãn trực tiếp |
+| `audio_encoding` | `base64` | Cách nhận WAV đọc: `base64` hoặc `binary` |
+| `store` | `false` | Yêu cầu máy chủ lưu transcript phiên này |
 
-KorvaTTS runs locally and returns a complete segment WAV. Cancellation discards
-late results and pending work; active inference cannot be interrupted and keeps
-the shared TTS engine occupied until it finishes. Speech synthesis currently
-supports Vietnamese and English.
-There is no remote playback acknowledgement or interruption protocol yet.
-The mobile client must explicitly implement this protocol; existing HTTP clients
-do not gain streaming automatically. Latency and public WSS deployment require
-separate end-to-end verification.
+Các tùy chọn kỹ thuật `threads` (1–16, mặc định 2) và `chunk` (10–1000 ms, mặc định 100) có thể bỏ qua trong ứng dụng thông thường.
+
+## Gửi âm thanh
+
+Gửi các WebSocket **binary message** chứa PCM16. Mỗi message phải có số byte chẵn, từ 2 đến 32.000 byte; 100 ms âm thanh tương đương 3.200 byte. Tách luồng micro thành các khối nhỏ và gửi liên tục, không gom cả bản ghi thành một message lớn.
+
+Khi người dùng dừng nói hoặc kết thúc phiên, gửi text message:
+
+```json
+{"type":"end"}
+```
+
+Tiếp tục đọc sự kiện cho đến `done`. Đóng kết nối trước đó sẽ hủy phiên và bỏ công việc đang chờ.
+
+## Nhận kết quả
+
+Các sự kiện thông thường là JSON trong WebSocket text message:
+
+| `type` | Nội dung |
+|---|---|
+| `status` | Thông báo, ví dụ máy chủ đang nạp model |
+| `ready` | Có thể bắt đầu gửi âm thanh; kèm `session_id` nếu bật lưu transcript |
+| `partial` | Bản nhận dạng tạm thời; nội dung có thể thay đổi khi nhận thêm tiếng |
+| `final` | Bản nhận dạng đã chốt cho một đoạn, kèm `id` |
+| `translation` | Bản dịch của đoạn, kèm `id` và `revision` |
+| `progress` | Số giây âm thanh đã xử lý |
+| `warning` | Một tính năng phụ bị giảm; phiên nhận dạng vẫn tiếp tục |
+| `error` | Lỗi khiến phiên kết thúc |
+| `done` | Máy chủ đã xử lý xong phiên |
+
+`partial` và `final` có thể xuất hiện nhiều lần xen kẽ với `translation`. Dùng `id` để ghép bản dịch với câu gốc. Khi một câu có nhiều bản dịch, giữ revision mới nhất: `provisional` (tạm thời), `live` (dịch nhanh từ câu đã chốt), rồi `context` (bản tinh chỉnh nếu chọn chế độ context). Bản `provisional` có thể viết lại cả câu, không chỉ nối thêm chữ.
+
+Khi bật `speakers`, sự kiện lời nói có thêm `speaker`; giá trị `0` nghĩa là chưa xác định được người nói. Với `speakers: true`, kết quả phân đoạn cuối phiên đến trong sự kiện `speakers` sau khi gửi `end`. Nhãn trực tiếp và nhãn phân đoạn cuối có thể khác nhau.
+
+## Nghe bản dịch
+
+Đặt `speech: true` cùng `target_language` để nhận âm thanh đọc cho bản dịch trực tiếp. Sự kiện `audio` mặc định là JSON có `data` base64 chứa **toàn bộ WAV** của một câu. Giải mã base64 rồi phát lần lượt theo thứ tự sự kiện; tiếp tục nhận WebSocket trong khi phát.
+
+Nếu chọn `audio_encoding: "binary"`, sự kiện âm thanh được gửi thành một binary message: 4 byte đầu là độ dài JSON big-endian, tiếp theo là JSON metadata, phần còn lại là WAV. Các sự kiện khác vẫn là text JSON. Không phải câu dịch nào cũng có âm thanh: máy chủ có thể gửi `audio_skipped` khi hàng đợi phát bị trễ hoặc quá tải. `audio_error` nghĩa là giọng đọc đã dừng cho phiên đó; transcript và bản dịch vẫn tiếp tục.
+
+## Lưu transcript
+
+`store: true` yêu cầu máy chủ lưu transcript phiên và trả `session_id` trong sự kiện `ready`. Tệp được giữ trên máy chủ; hiện không có API công khai để tải lại transcript. Tắt tùy chọn này nếu ứng dụng không cần lưu.
+
+## Xử lý lỗi
+
+- Không mở được kết nối: kiểm tra mạng và thử lại `wss://stt.qiverse.top/ws`.
+- Nhận `error` trước `ready`: cấu hình không hợp lệ, máy chủ đang bận hoặc thiếu dịch vụ phụ trợ cần thiết.
+- Không thấy `ready`: chờ sự kiện `status`; nếu phiên bị đóng hoặc quá thời gian, kết nối lại và gửi cấu hình đầu tiên.
+- Ngừng nhận âm thanh: gửi `{"type":"end"}` để máy chủ hoàn tất và trả `done`.
+
+WebSocket tự trả lời ping/pong để duy trì kết nối. Ứng dụng không cần gửi heartbeat riêng.
+
+## Ghi chú cho người phát triển
+
+`http://127.0.0.1:8765` là Origin cho giao diện dev cũ chạy cùng máy; người dùng dịch vụ công khai không dùng địa chỉ đó. Endpoint loopback của server là cấu hình nội bộ máy chủ, không phải URL để ứng dụng từ xa kết nối. Giao thức không cung cấp xác thực người dùng; Origin chỉ kiểm soát nguồn trình duyệt, không thay thế cơ chế xác thực.

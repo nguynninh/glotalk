@@ -1,0 +1,23 @@
+[package]
+name = "onplay-server-cli"
+description = "onplay-server: the streaming WebSocket server binary"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[[bin]]
+name = "onplay-server"
+path = "src/main.rs"
+
+[dependencies]
+onplay-server.workspace = true
+onplay-tts.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tungstenite.workspace = true
+
+[lints]
+workspace = true

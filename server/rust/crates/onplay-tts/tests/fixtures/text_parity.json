@@ -1,0 +1,300 @@
+{
+ "korvatts": "0.1.3",
+ "cases": [
+  {
+   "text": "Xin chào các bạn",
+   "normalized": {
+    "vi": "<vi>Xin chào các bạn.</vi>",
+    "en": "<en>Xin chào các bạn.</en>"
+   },
+   "chunks": {
+    "300": [
+     "Xin chào các bạn"
+    ],
+    "120": [
+     "Xin chào các bạn"
+    ],
+    "40": [
+     "Xin chào các bạn"
+    ]
+   }
+  },
+  {
+   "text": "Đừng hỏi đất nước đã làm gì cho bạn. Hãy hỏi bạn đã làm gì cho đất nước!",
+   "normalized": {
+    "vi": "<vi>Đừng hỏi đất nước đã làm gì cho bạn. Hãy hỏi bạn đã làm gì cho đất nước!</vi>",
+    "en": "<en>Đừng hỏi đất nước đã làm gì cho bạn. Hãy hỏi bạn đã làm gì cho đất nước!</en>"
+   },
+   "chunks": {
+    "300": [
+     "Đừng hỏi đất nước đã làm gì cho bạn. Hãy hỏi bạn đã làm gì cho đất nước!"
+    ],
+    "120": [
+     "Đừng hỏi đất nước đã làm gì cho bạn. Hãy hỏi bạn đã làm gì cho đất nước!"
+    ],
+    "40": [
+     "Đừng hỏi đất nước đã làm gì cho bạn.",
+     "Hãy hỏi bạn đã làm gì cho đất nước!"
+    ]
+   }
+  },
+  {
+   "text": "a — b , “c”  😀 x@y",
+   "normalized": {
+    "vi": "<vi>a - b, \"c\" x at y.</vi>",
+    "en": "<en>a - b, \"c\" x at y.</en>"
+   },
+   "chunks": {
+    "300": [
+     "a — b , “c”  😀 x@y"
+    ],
+    "120": [
+     "a — b , “c”  😀 x@y"
+    ],
+    "40": [
+     "a — b , “c”  😀 x@y"
+    ]
+   }
+  },
+  {
+   "text": "ok '' \"\"\" '' ``x``",
+   "normalized": {
+    "vi": "<vi>ok' \"'x'</vi>",
+    "en": "<en>ok' \"'x'</en>"
+   },
+   "chunks": {
+    "300": [
+     "ok '' \"\"\" '' ``x``"
+    ],
+    "120": [
+     "ok '' \"\"\" '' ``x``"
+    ],
+    "40": [
+     "ok '' \"\"\" '' ``x``"
+    ]
+   }
+  },
+  {
+   "text": "e.g., this i.e., that",
+   "normalized": {
+    "vi": "<vi>for example, this that is, that.</vi>",
+    "en": "<en>for example, this that is, that.</en>"
+   },
+   "chunks": {
+    "300": [
+     "e.g., this i.e., that"
+    ],
+    "120": [
+     "e.g., this i.e., that"
+    ],
+    "40": [
+     "e.g., this i.e., that"
+    ]
+   }
+  },
+  {
+   "text": "Mr. Smith met Dr. J. Doe at 5 p.m. Then left.  Ok?",
+   "normalized": {
+    "vi": "<vi>Mr. Smith met Dr. J. Doe at 5 p.m. Then left. Ok?</vi>",
+    "en": "<en>Mr. Smith met Dr. J. Doe at 5 p.m. Then left. Ok?</en>"
+   },
+   "chunks": {
+    "300": [
+     "Mr. Smith met Dr. J. Doe at 5 p.m. Then left. Ok?"
+    ],
+    "120": [
+     "Mr. Smith met Dr. J. Doe at 5 p.m. Then left. Ok?"
+    ],
+    "40": [
+     "Mr. Smith met Dr. J. Doe at 5 p.m.",
+     "Then left. Ok?"
+    ]
+   }
+  },
+  {
+   "text": "Line one\nstill one\n \n\nParagraph two. Spaced out",
+   "normalized": {
+    "vi": "<vi>Line one still one Paragraph two. Spaced out.</vi>",
+    "en": "<en>Line one still one Paragraph two. Spaced out.</en>"
+   },
+   "chunks": {
+    "300": [
+     "Line one\nstill one",
+     "Paragraph two. Spaced out"
+    ],
+    "120": [
+     "Line one\nstill one",
+     "Paragraph two. Spaced out"
+    ],
+    "40": [
+     "Line one\nstill one",
+     "Paragraph two. Spaced out"
+    ]
+   }
+  },
+  {
+   "text": "Giá: 100 / 200 #tag [x] |y| → ←",
+   "normalized": {
+    "vi": "<vi>Giá: 100 200 tag x y.</vi>",
+    "en": "<en>Giá: 100 200 tag x y.</en>"
+   },
+   "chunks": {
+    "300": [
+     "Giá: 100 / 200 #tag [x] |y| → ←"
+    ],
+    "120": [
+     "Giá: 100 / 200 #tag [x] |y| → ←"
+    ],
+    "40": [
+     "Giá: 100 / 200 #tag [x] |y| → ←"
+    ]
+   }
+  },
+  {
+   "text": "Xong!",
+   "normalized": {
+    "vi": "<vi>Xong!</vi>",
+    "en": "<en>Xong!</en>"
+   },
+   "chunks": {
+    "300": [
+     "Xong!"
+    ],
+    "120": [
+     "Xong!"
+    ],
+    "40": [
+     "Xong!"
+    ]
+   }
+  },
+  {
+   "text": "Trailing quote \"",
+   "normalized": {
+    "vi": "<vi>Trailing quote \"</vi>",
+    "en": "<en>Trailing quote \"</en>"
+   },
+   "chunks": {
+    "300": [
+     "Trailing quote \""
+    ],
+    "120": [
+     "Trailing quote \""
+    ],
+    "40": [
+     "Trailing quote \""
+    ]
+   }
+  },
+  {
+   "text": "ệ ệ ﬁ ①",
+   "normalized": {
+    "vi": "<vi>ệ ệ fi 1.</vi>",
+    "en": "<en>ệ ệ fi 1.</en>"
+   },
+   "chunks": {
+    "300": [
+     "ệ ệ ﬁ ①"
+    ],
+    "120": [
+     "ệ ệ ﬁ ①"
+    ],
+    "40": [
+     "ệ ệ ﬁ ①"
+    ]
+   }
+  },
+  {
+   "text": "Tab\tand\u001fseparator",
+   "normalized": {
+    "vi": "<vi>Tab and separator.</vi>",
+    "en": "<en>Tab and separator.</en>"
+   },
+   "chunks": {
+    "300": [
+     "Tab\tand\u001fseparator"
+    ],
+    "120": [
+     "Tab\tand\u001fseparator"
+    ],
+    "40": [
+     "Tab\tand\u001fseparator"
+    ]
+   }
+  },
+  {
+   "text": "Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài",
+   "normalized": {
+    "vi": "<vi>Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài.</vi>",
+    "en": "<en>Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài.</en>"
+   },
+   "chunks": {
+    "300": [
+     "Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất",
+     "dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài"
+    ],
+    "120": [
+     "Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài Một câu rất dài"
+    ],
+    "40": [
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài",
+     "Một câu rất dài Một câu rất dài Một câu",
+     "rất dài Một câu rất dài Một câu rất dài"
+    ]
+   }
+  },
+  {
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "normalized": {
+    "vi": "<vi>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.</vi>",
+    "en": "<en>xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.</en>"
+   },
+   "chunks": {
+    "300": [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ],
+    "120": [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    ],
+    "40": [
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "xxxxxxxxxx"
+    ]
+   }
+  }
+ ]
+}

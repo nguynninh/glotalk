@@ -1,0 +1,19 @@
+[package]
+name = "onplay-sherpa"
+description = "Safe owned wrappers over the Sherpa ONNX C API used by onplay-stt"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+onplay-sherpa-sys.workspace = true
+thiserror.workspace = true
+
+# The only crate besides the -sys bindings allowed to use unsafe; every block states why.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"

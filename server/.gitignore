@@ -7,3 +7,8 @@ build/
 __pycache__/
 
 .idea/
+
+AGENTS.md
+sessions/
+dist/
+rust/target/
