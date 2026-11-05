@@ -5,15 +5,16 @@
 //! `lib/libonnxruntime.dylib` next to the binary unless `ORT_DYLIB_PATH` is set, the same
 //! library the Sherpa ONNX runtime loads, so speech and recognition share one copy.
 //! `ONPLAY_LOG=1` prints one line per connection event: client address, Origin and
-//! User-Agent, options and outcome, never audio or recognized text.
+//! User-Agent, options, engine slot and outcome. `ONPLAY_DEBUG=1` also prints every frame
+//! and pipeline step with timings. Neither prints audio or recognized text.
+
+mod log;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use onplay_server::config::Capture;
-use onplay_server::socket::Speakers;
-use onplay_server::events::Client;
-use onplay_server::{Config, Event, Outcome, Services, Silent};
+use onplay_server::config::{parse_max_sessions, Capture};
+use onplay_server::{Config, Services, Silent};
 
 fn main() -> ExitCode {
     let executable = std::env::current_exe().ok().and_then(|path| path.canonicalize().ok());
@@ -26,6 +27,10 @@ fn main() -> ExitCode {
         eprintln!("Error: ONPLAY_CAPTURE_AUDIO={value:?}; use 0 (nothing), 1 (transcript and audio), 2 (transcript) or 3 (audio).");
         return ExitCode::FAILURE;
     }
+    if let Some(value) = std::env::var("ONPLAY_MAX_SESSIONS").ok().filter(|value| parse_max_sessions(value).is_none()) {
+        eprintln!("Error: ONPLAY_MAX_SESSIONS={value:?}; use a positive number of concurrent sessions.");
+        return ExitCode::FAILURE;
+    }
     // Before any model loads: exiting while a background thread is inside ONNX Runtime
     // session creation crashes the process.
     let listener = match onplay_server::bind(&config) {
@@ -35,11 +40,9 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let services = if std::env::var("ONPLAY_LOG").is_ok_and(|value| value == "1") {
-        Services::start(config, |event| println!("{}", describe(&event)))
-    } else {
-        Services::start(config, Silent)
-    };
+    let enabled = |name: &str| std::env::var(name).is_ok_and(|value| value == "1");
+    let debug = enabled("ONPLAY_DEBUG");
+    let services = if debug || enabled("ONPLAY_LOG") { Services::start(config, log::Log { debug }) } else { Services::start(config, Silent) };
     // Mobile sessions translate, which uses low-latency endpointing, with the default 2 threads.
     services.preload(2, true);
     // Speech is optional: recognition still works and sessions report `audio_error`.
@@ -49,6 +52,7 @@ fn main() -> ExitCode {
     }
     let config = &services.config;
     println!("ONPlay STT stream: ws://{} (allowed Origin: {})", config.address, config.origins.join(", "));
+    println!("Concurrent sessions: up to {}", config.max_sessions);
     println!("Capture: {}", match config.capture {
         Capture::Off => "off (only sessions that send store: true)",
         Capture::All => "transcript and audio",
@@ -62,34 +66,4 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
-}
-
-fn describe(event: &Event) -> String {
-    match event {
-        Event::Refused { client } => format!("refused {}", describe_client(client)),
-        Event::Opened { connection, client } => format!("#{connection} opened {}", describe_client(client)),
-        Event::Started { connection, source, target, speech, speakers, session } => {
-            let target = if target.is_empty() { "transcript only" } else { target };
-            let speakers = match speakers {
-                Speakers::Off => "off",
-                Speakers::Live => "live",
-                Speakers::Full => "full",
-            };
-            let session = session.as_deref().map(|id| format!(", session {id}")).unwrap_or_default();
-            format!("#{connection} started {source} -> {target}, speech {}, speakers {speakers}{session}", if *speech { "on" } else { "off" })
-        }
-        Event::Ended { connection, outcome, duration, audio, segments } => {
-            let outcome = match outcome {
-                Outcome::Done => "done".to_owned(),
-                Outcome::Closed => "client left".to_owned(),
-                Outcome::Error(text) => format!("error: {text}"),
-            };
-            format!("#{connection} ended ({outcome}) after {:.1} s, {:.1} s audio, {segments} segments", duration.as_secs_f64(), audio.as_secs_f64())
-        }
-    }
-}
-
-fn describe_client(client: &Client) -> String {
-    let missing = |value: &Option<String>| value.clone().unwrap_or_else(|| "-".to_owned());
-    format!("{} (Origin {}, User-Agent {})", client.address, missing(&client.origin), missing(&client.user_agent))
 }

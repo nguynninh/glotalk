@@ -98,30 +98,36 @@ that does not answer within 20 s, so a vanished mobile client cannot hold the en
 The handshake requires an `Origin` from the configured list; messages are limited to
 32,000 bytes (one second of PCM16).
 
-After the options message, the connection thread takes the process-wide engine lock
-(one session at a time; a second session gets an `error` event) and submits the
-session's recognition to the recognition worker (`pipeline/worker.rs`): one
-long-lived thread that owns every loaded Sherpa model, so handles never cross threads.
+After the options message, the connection thread takes a free engine slot
+(`engine_slots.rs`; `ONPLAY_MAX_SESSIONS`, default 4, sessions at once; a session
+beyond the limit gets an `error` event and is not queued) and submits the session's
+recognition to that slot's recognition worker (`pipeline/worker.rs`): one long-lived
+thread per slot that owns its loaded Sherpa models, so handles never cross threads.
+Sherpa handles are neither `Send` nor `Sync`, so concurrent sessions do not share a
+recognizer; each worker loads its own.
 The job creates a `Session` on a cached `Engine`, feeds PCM in the client's chunk size
 (the same decode cadence as the earlier `onplay-stt -` child process), runs the
 optional diarization pass and finally sends `done` and closes the connection. The
 connection thread hands PCM over a bounded channel (64 chunks); when it is full,
 reading pauses while queued events are still written. When the connection ends, the
 connection thread cancels the session, drops the channel, waits for the job to finish
-and only then releases the engine lock.
+and only then releases the engine slot.
 
 Models stay loaded between sessions: loading the streaming model takes about 1.1 s
 and the speaker transcriber more, against about 0.2 s to decode a 4 s clip. The worker
 keeps the two most recently used streaming engines (low latency and live speaker
-labels change the native recognizer) and one speaker transcriber. At startup it loads
-the engine for 2 threads with low latency, the translating mobile default. A panicking
+labels change the native recognizer) and one speaker transcriber. At startup the first
+worker loads the engine for 2 threads with low latency, the translating mobile default;
+the lowest free slot is taken first, so other workers load models only while the first
+is busy, and keep them afterwards. Memory therefore grows with the peak number of
+concurrent sessions; the 2 GB figure below is for one worker. A panicking
 job drops the cached models and the worker continues. Measured on an M4 with a 4 s
 clip: `ready` after 0.02 s instead of about 1.2 s, end-of-input diarization 0.24 s
 instead of 3.6 s; the server's resident memory was about 2 GB with two engines, the
 speaker transcriber and KorvaTTS loaded.
 
 KorvaTTS runs in process through `onplay-tts` with one shared synthesizer behind a
-mutex. It runs on the CPU provider: CoreML (all units, GPU or Neural Engine) was
+mutex; concurrent sessions take turns per sentence. It runs on the CPU provider: CoreML (all units, GPU or Neural Engine) was
 1.1-1.6x slower on an M4. Live speech caps runaway duration predictions
 (`cap_runaway_duration`), which otherwise turn short English sentences into 5-7 s of
 invented speech. Sherpa ONNX and `ort` load the same `build/lib/libonnxruntime.dylib`. The
@@ -144,7 +150,7 @@ The offline pass is limited to 600 seconds of PCM; longer input disables only th
 pass, with a warning. Speaker results are sent as a separate `speakers` event; the
 streaming finals already sent are unchanged and failure only adds a warning. When
 the connection closes during the pass, the per-turn callback stops it after the
-current turn and the engine lock is released when the recognition job ends.
+current turn and the engine slot is released when the recognition job ends.
 Diarization itself is not interruptible. No speaker embeddings persist across runs.
 
 ### Live provisional labels

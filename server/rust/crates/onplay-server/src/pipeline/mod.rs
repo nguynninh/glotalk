@@ -20,12 +20,13 @@ pub use worker::{Models, RecognitionWorker};
 
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use onplay_stt::diarize::SpeakerModels;
 use onplay_stt::EngineConfig;
 use serde_json::{json, Map, Value};
 
+use crate::events::Stage;
 use crate::numbers::significant6;
 use crate::sessions::{ContextJob, ContextPasses};
 use crate::translation::Mode;
@@ -66,12 +67,16 @@ fn complete(models: &mut Models, shared: &Shared, setup: &Setup, finished: recog
     let mut speaker_s = None;
     if let (Some(speaker_models), Some(recording)) = (&setup.diarize, &finished.recording) {
         if !recording.is_empty() && !shared.cancelled() {
-            speaker_s = Some(diarization::run(models, shared, speaker_models, setup.engine.threads, recording));
+            let took = diarization::run(models, shared, speaker_models, setup.engine.threads, recording);
+            shared.trace.stage(Stage::Diarization, Duration::from_secs_f64(took));
+            speaker_s = Some(took);
         }
     }
+    let drain = Instant::now();
     while shared.busy() && !shared.cancelled() {
         std::thread::sleep(DRAIN_POLL);
     }
+    shared.trace.stage(Stage::Drain, drain.elapsed());
     if shared.cancelled() {
         return;
     }

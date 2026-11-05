@@ -6,11 +6,11 @@
 //!      -> events and WAV frames back over the same socket
 //!
 //! The translation router stays a separate HTTP service (`./scripts/dev/translation.sh`).
-//! One recognition session runs at a time ([`EngineLock`]); opt-in transcripts are
-//! appended by [`sessions`].
+//! Up to `ONPLAY_MAX_SESSIONS` recognition sessions run at once ([`EngineSlots`]), each on
+//! its own recognition worker; opt-in transcripts are appended by [`sessions`].
 
 pub mod config;
-pub mod engine_lock;
+pub mod engine_slots;
 pub mod events;
 pub mod languages;
 pub mod models;
@@ -19,13 +19,14 @@ pub mod pipeline;
 pub mod sessions;
 pub mod socket;
 pub mod speech;
+pub mod trace;
 pub mod translation;
 
 use std::net::TcpListener;
 use std::sync::Arc;
 
 pub use config::Config;
-pub use engine_lock::EngineLock;
+pub use engine_slots::EngineSlots;
 pub use events::{Event, Observer, Outcome, Silent};
 
 use pipeline::RecognitionWorker;
@@ -38,12 +39,13 @@ pub struct Services {
     pub config: Config,
     pub translator: Arc<Translator>,
     pub speech: Arc<Speech>,
-    pub lock: EngineLock,
+    pub slots: EngineSlots,
     pub context_passes: ContextPasses,
-    /// Owns the loaded Sherpa models and runs every session's recognition.
-    pub recognition: RecognitionWorker,
+    /// One worker per slot; each owns its loaded Sherpa models and runs the recognition of
+    /// the session holding that slot.
+    pub recognition: Vec<RecognitionWorker>,
     /// Receives connection events.
-    pub observer: Box<dyn Observer>,
+    pub observer: Arc<dyn Observer>,
 }
 
 impl Services {
@@ -51,18 +53,20 @@ impl Services {
     /// or earlier through [`Services::preload`] and [`Speech::load`].
     pub fn start(config: Config, observer: impl Observer + 'static) -> Self {
         let translator = Arc::new(Translator::new(&config.translate_url));
-        let lock = EngineLock::default();
-        let context_passes = ContextPasses::start(translator.clone(), lock.clone());
-        Self { config, translator, speech: Arc::new(Speech::new()), lock, context_passes, recognition: RecognitionWorker::start(), observer: Box::new(observer) }
+        let slots = EngineSlots::new(config.max_sessions);
+        let context_passes = ContextPasses::start(translator.clone(), slots.clone());
+        let recognition = (0..slots.count()).map(|_| RecognitionWorker::start()).collect();
+        Self { config, translator, speech: Arc::new(Speech::new()), slots, context_passes, recognition, observer: Arc::new(observer) }
     }
 
-    /// Loads the streaming engine for `threads` and `low_latency` in the background, so
-    /// the first matching session starts without the model load. Sessions with other
-    /// options (thread count, live speaker labels) still load their engine once.
+    /// Loads the streaming engine for `threads` and `low_latency` on the first worker in the
+    /// background, so a matching session on a free server starts without the model load.
+    /// Sessions with other options (thread count, live speaker labels), or on another
+    /// worker while the first is busy, still load their engine once.
     pub fn preload(&self, threads: i32, low_latency: bool) {
         let engine = onplay_stt::EngineConfig { model: self.config.stt.clone(), threads, speaker_model: None, low_latency };
         // A load error is reported again, to the client, by the first session that needs it.
-        drop(self.recognition.run(move |models| drop(models.engine(&engine))));
+        drop(self.recognition[0].run(move |models| drop(models.engine(&engine))));
     }
 }
 

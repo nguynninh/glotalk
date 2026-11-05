@@ -1,7 +1,7 @@
 //! In-process KorvaTTS returning bounded PCM16 WAV.
 //!
-//! One synthesizer, loaded once and shared behind a mutex: sessions run one at a time and
-//! speak one sentence at a time, so a single model copy is enough.
+//! One synthesizer, loaded once and shared behind a mutex: each session speaks one
+//! sentence at a time and concurrent sessions take turns, so a single model copy is enough.
 
 pub mod voices;
 

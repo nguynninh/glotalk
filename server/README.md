@@ -33,10 +33,16 @@ Settings: `ONPLAY_PUBLIC_ORIGIN` (comma-separated extra allowed `Origin` values;
 default allows only `http://127.0.0.1:8765`), `ONPLAY_TRANSLATE_URL` (default
 `http://127.0.0.1:5002`), `ONPLAY_SESSION_DIR` (default `sessions/`),
 `ONPLAY_CAPTURE_AUDIO` (for every session: `0` nothing, the default; `1` transcript
-and PCM; `2` transcript; `3` PCM; other values stop the server), `ONPLAY_LOG`
-(`1` prints one stdout line when a connection is refused, opens, starts and ends: client
-address, `Origin`, `User-Agent`, languages, outcome, audio seconds and segment count;
-never audio or text; off by default), `ONPLAY_ROOT`
+and PCM; `2` transcript; `3` PCM; other values stop the server), `ONPLAY_MAX_SESSIONS`
+(recognition sessions served at once, default 4; more get an `error` event; each busy
+session may load its own streaming engine; non-positive values stop the server), `ONPLAY_LOG`
+(`1` prints one UTC-timestamped stdout line when a connection is refused, opens, starts
+and ends: client address, `Origin`, `User-Agent`, languages, engine slot and sessions
+active, outcome, audio seconds and segment count; off by default), `ONPLAY_DEBUG` (`1`
+prints those lines plus every WebSocket frame in and out, with time since the connection
+opened, size and the JSON fields, and pipeline step timings: queued, engine, finish,
+diarization, drain; recognized and translated text appear only as character counts and
+audio data is left out; off by default; neither setting prints audio or recognized text), `ONPLAY_ROOT`
 and `ORT_DYLIB_PATH` (defaults derived from the binary location in `build/`).
 
 ### HTTPS origin
@@ -48,8 +54,9 @@ variable on every restart; without it, connections that send that origin get 403
 ONPLAY_PUBLIC_ORIGIN=https://stt.qiverse.top ./scripts/server.sh
 ```
 
-The tunnel must route `/ws` to `127.0.0.1:8766`. Do not use an unrestricted origin
-policy. Clients must send an allowed `Origin` header.
+The tunnel routes the whole hostname to `127.0.0.1:8766`; the server ignores the
+request path. Do not use an unrestricted origin policy. Clients must send an
+allowed `Origin` header.
 
 With `ONPLAY_LOG=1` the client address is the tunnel's `CF-Connecting-IP` header (else
 the first `X-Forwarded-For` address, else the TCP peer). These headers and `User-Agent`

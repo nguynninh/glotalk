@@ -15,10 +15,12 @@ use super::client_config::{ClientConfig, Speakers};
 use super::outbox::Outbox;
 use super::transport::{Ended, Incoming, Transport};
 use super::MAX_MESSAGE_BYTES;
-use crate::engine_lock::EngineGuard;
+use crate::engine_slots::EngineSlot;
 use crate::models::embedding_is_valid;
+use crate::events::Stage;
 use crate::pipeline::{self, Input, Setup, Shared};
 use crate::sessions::{self, Recorder, WavFile, MAX_CAPTURE_BYTES};
+use crate::trace::Trace;
 use crate::{Event, Outcome, Services};
 
 const CONFIG_TIMEOUT: Duration = Duration::from_secs(10);
@@ -56,23 +58,24 @@ struct Running {
     recording: Option<Vec<u8>>,
     capture: Option<WavFile>,
     input_finished: bool,
-    _engine: EngineGuard,
+    slot: EngineSlot,
 }
 
 pub fn run(socket: WebSocket<TcpStream>, services: &Arc<Services>, connection: u64) {
     let opened = Instant::now();
+    let trace = Trace::new(services.observer.clone(), connection, opened);
     let (outbox, outgoing) = Outbox::new();
-    let Ok(mut transport) = Transport::new(socket, outgoing) else { return };
+    let Ok(mut transport) = Transport::new(socket, outgoing, trace.clone()) else { return };
     let mut running = None;
     let mut outcome = Outcome::Closed;
-    if let Err(Failure::Message(text)) = serve(&mut transport, &outbox, services, &mut running, connection) {
+    if let Err(Failure::Message(text)) = serve(&mut transport, &outbox, services, &mut running, connection, &trace) {
         let _ = outbox.emit(&json!({"type": "error", "text": text}));
         outcome = Outcome::Error(text);
     }
     outbox.cancel();
     if let Some(running) = running.as_mut() {
         // Unblocks the recognition job, which closes the connection when it ends; the
-        // engine lock is released only after that.
+        // engine slot is released only after that.
         running.input.take();
         if let Some(finished) = running.recognition.take() {
             let _ = finished.recv();
@@ -99,13 +102,13 @@ pub fn run(socket: WebSocket<TcpStream>, services: &Arc<Services>, connection: u
     });
 }
 
-fn serve(transport: &mut Transport, outbox: &Outbox, services: &Arc<Services>, running: &mut Option<Running>, connection: u64) -> Result<(), Failure> {
+fn serve(transport: &mut Transport, outbox: &Outbox, services: &Arc<Services>, running: &mut Option<Running>, connection: u64, trace: &Trace) -> Result<(), Failure> {
     let config = match transport.next(Some(Instant::now() + CONFIG_TIMEOUT))? {
         Some(Incoming::Text(text)) => ClientConfig::parse(&text).or_else(fail)?,
         Some(Incoming::Binary(_)) => return fail("Cấu hình không hợp lệ."),
         None => return fail("Không nhận được cấu hình trong 10 giây."),
     };
-    *running = Some(start(&config, outbox, services)?);
+    *running = Some(start(&config, outbox, services, trace)?);
     let running = running.as_mut().expect("just started");
     services.observer.event(Event::Started {
         connection,
@@ -114,6 +117,9 @@ fn serve(transport: &mut Transport, outbox: &Outbox, services: &Arc<Services>, r
         speech: config.speech,
         speakers: config.speakers,
         session: running.shared.recorder.as_ref().map(|recorder| recorder.id().to_owned()),
+        slot: running.slot.index(),
+        active: services.slots.active(),
+        capacity: services.slots.count(),
     });
     loop {
         let Some(message) = transport.next(None)? else { continue };
@@ -135,7 +141,7 @@ fn serve(transport: &mut Transport, outbox: &Outbox, services: &Arc<Services>, r
     }
 }
 
-fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>) -> Result<Running, Failure> {
+fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>, trace: &Trace) -> Result<Running, Failure> {
     let paths = &services.config;
     let warn = |text: &str| {
         let _ = outbox.emit(&json!({"type": "warning", "text": text}));
@@ -147,7 +153,9 @@ fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>) -> Re
         warn("Kiểm tra model người nói thất bại. Chạy ./scripts/setup/speakers.sh. Vẫn nhận dạng chữ.");
     }
     let store = config.store || paths.capture.transcript();
-    let Some(engine) = services.lock.try_acquire() else { return fail("Engine đang chạy phiên khác. Hãy dừng phiên đó trước.") };
+    let Some(slot) = services.slots.try_acquire() else {
+        return fail(format!("Máy chủ đang chạy tối đa {} phiên nhận dạng. Hãy thử lại sau.", services.slots.count()));
+    };
     let id = sessions::new_id();
     let recorder = if store {
         let recorder = Recorder::create(&paths.session_dir, &id, &config.target, &config.source).or_else(|error| fail(error.to_string()))?;
@@ -155,7 +163,7 @@ fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>) -> Re
     } else {
         None
     };
-    let shared = Arc::new(Shared::new(outbox.clone(), config, services.translator.clone(), services.speech.clone(), recorder.clone()));
+    let shared = Arc::new(Shared::new(outbox.clone(), config, services.translator.clone(), services.speech.clone(), recorder.clone(), trace.clone()));
     pipeline::start_lanes(&shared);
     let _ = outbox.emit(&json!({"type": "status", "text": "Đang nạp model · không tải video lên server…"}));
     let capture = if paths.capture.audio() { Some(sessions::open_audio(&paths.session_dir, &id).or_else(|error| fail(error.to_string()))?) } else { None };
@@ -177,8 +185,11 @@ fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>) -> Re
     };
     let (input, received) = mpsc::sync_channel(INPUT_QUEUE);
     let recognition = {
-        let (shared, passes) = (shared.clone(), services.clone());
-        services.recognition.run(move |models| pipeline::run(models, &shared, &setup, &received, &passes.context_passes))
+        let (shared, passes, submitted) = (shared.clone(), services.clone(), Instant::now());
+        services.recognition[slot.index()].run(move |models| {
+            shared.trace.stage(Stage::Queued, submitted.elapsed());
+            pipeline::run(models, &shared, &setup, &received, &passes.context_passes);
+        })
     };
     Ok(Running {
         shared,
@@ -187,7 +198,7 @@ fn start(config: &ClientConfig, outbox: &Outbox, services: &Arc<Services>) -> Re
         recording: diarize.then(Vec::new),
         capture,
         input_finished: false,
-        _engine: engine,
+        slot,
     })
 }
 

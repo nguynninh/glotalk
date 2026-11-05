@@ -9,15 +9,14 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 
 ## [Unreleased]
 
-### Added
-
-- `ONPLAY_LOG=1` makes `onplay-server` print a line per connection event (refused,
-  opened, started, ended) with the client address (`CF-Connecting-IP`, then
-  `X-Forwarded-For`, then the TCP peer), `Origin`, `User-Agent`, languages, outcome, audio
-  seconds and segment count; never audio or recognized text. Off by default. The
-  `onplay-server` library reports these through an `Observer` and does not print.
+## [1.0.1] - 2026-11-05
 
 ### Changed
+- Added connection and pipeline logging controls for the server.
+- `onplay-server` serves several recognition sessions at once instead of one,
+  with a configurable session limit.
+- The `onplay-server` start line clearly labels its listening address and allowed
+  `Origin` values.
 
 - The `onplay-server` start line shows the listening address
   (`ws://127.0.0.1:8766`) and labels the allowed `Origin` values, which it used to print as

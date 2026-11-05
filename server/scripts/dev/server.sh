@@ -1,7 +1,7 @@
 #!/bin/sh
 # Streaming WebSocket server on ws://127.0.0.1:8766 (Rust). Also starts the translation
 # router on 5002 unless one is already listening or ONPLAY_TRANSLATION=0; it stops with the server.
-# ONPLAY_LOG=1 prints a line per connection.
+# ONPLAY_LOG=1 prints a line per connection; ONPLAY_DEBUG=1 also prints frames and timings.
 set -eu
 cd "$(dirname "$0")/../.."
 if [ ! -x build/onplay-server ]; then ./scripts/dev/build.sh; fi

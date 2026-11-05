@@ -11,6 +11,7 @@ use serde_json::json;
 use super::state::Shared;
 use super::worker::Models;
 use super::Input;
+use crate::events::Stage;
 use crate::numbers::significant6;
 
 /// Timings in seconds, as the CLI printed them on stderr.
@@ -37,6 +38,7 @@ pub fn run(models: &mut Models, shared: &Shared, config: &EngineConfig, chunk_ms
     let labelled = config.speaker_model.is_some();
     let mut session = engine.session(|transcript: &Transcript| shared.on_transcript(transcript, labelled)).map_err(|error| error.to_string())?;
     let model_load_s = load.elapsed().as_secs_f64();
+    shared.trace.stage(Stage::Engine, load.elapsed());
     let mut ready = json!({"type": "ready"});
     if let Some(recorder) = &shared.recorder {
         ready["session_id"] = recorder.id().into();
@@ -63,12 +65,14 @@ pub fn run(models: &mut Models, shared: &Shared, config: &EngineConfig, chunk_ms
                 pending.drain(..full);
             }
             Ok(Input::End { recording }) => {
+                let flush = Instant::now();
                 if !pending.is_empty() {
                     feeder.feed(shared, &mut session, &pending)?;
                 }
                 let tick = Instant::now();
                 session.finish().map_err(|error| error.to_string())?;
                 feeder.compute += tick.elapsed();
+                shared.trace.stage(Stage::Finish, flush.elapsed());
                 let metrics = Metrics {
                     model_load_s,
                     audio_s: feeder.position as f64 / SAMPLE_RATE as f64,

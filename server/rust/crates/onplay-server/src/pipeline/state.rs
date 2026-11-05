@@ -12,6 +12,7 @@ use super::segment::Segment;
 use crate::sessions::Recorder;
 use crate::socket::{AudioEncoding, ClientConfig, Outbox};
 use crate::speech::Speech;
+use crate::trace::Trace;
 use crate::translation::{Mode, Translator};
 
 /// Translations waiting before the session gives up on keeping up.
@@ -61,6 +62,7 @@ pub struct Shared {
     pub translator: Arc<Translator>,
     pub speech_engine: Arc<Speech>,
     pub recorder: Option<Arc<Recorder>>,
+    pub trace: Trace,
     /// Id the next final will receive.
     pub segment_id: AtomicU64,
     /// PCM bytes received from the client so far.
@@ -88,6 +90,7 @@ impl Shared {
         translator: Arc<Translator>,
         speech_engine: Arc<Speech>,
         recorder: Option<Arc<Recorder>>,
+        trace: Trace,
     ) -> Self {
         Self {
             outbox,
@@ -99,6 +102,7 @@ impl Shared {
             translator,
             speech_engine,
             recorder,
+            trace,
             segment_id: AtomicU64::new(0),
             received: AtomicU64::new(0),
             finals: Mutex::new(Vec::new()),

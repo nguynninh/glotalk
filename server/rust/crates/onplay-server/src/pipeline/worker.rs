@@ -1,10 +1,10 @@
-//! The recognition worker: one long-lived thread that owns every loaded Sherpa model and
-//! runs each session's recognition on it.
+//! A recognition worker: one long-lived thread that owns its loaded Sherpa models and
+//! runs the recognition of the sessions holding its engine slot, one at a time.
 //!
 //! Loading the streaming model takes about a second and the speaker models several
 //! seconds, against a fraction of a second of decoding for a short clip, so models stay
-//! loaded between sessions. Sherpa handles never leave this thread. Sessions are already
-//! serialized by the engine lock, so one thread is enough.
+//! loaded between sessions. Sherpa handles are neither `Send` nor `Sync` and never leave
+//! this thread, so concurrent sessions run on separate workers with separate models.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};

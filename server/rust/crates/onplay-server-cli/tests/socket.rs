@@ -21,6 +21,8 @@ const ADDRESS: &str = "127.0.0.1:8766";
 const ORIGIN: &str = "http://127.0.0.1:8765";
 const MODEL: &str = "models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_th_vi_zh-2025-02-10";
 const TIMEOUT: Duration = Duration::from_secs(20);
+/// `ONPLAY_MAX_SESSIONS` for the test server.
+const SESSIONS: usize = 2;
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -60,7 +62,7 @@ impl Server {
         assert!(TcpStream::connect(ADDRESS).is_err(), "Port 8766 is in use; stop the running onplay-server first.");
         let binary = root().join("build/onplay-server");
         assert!(binary.is_file(), "{} not found; run ./scripts/dev/build.sh", binary.display());
-        let server = Self(Command::new(binary).stdout(Stdio::null()).spawn().unwrap());
+        let server = Self(Command::new(binary).env("ONPLAY_MAX_SESSIONS", SESSIONS.to_string()).stdout(Stdio::null()).spawn().unwrap());
         // The server listens only after loading its models.
         let deadline = Instant::now() + Duration::from_secs(30);
         while TcpStream::connect(ADDRESS).is_err() {
@@ -169,19 +171,25 @@ fn finals(events: &[Value]) -> Vec<&Value> {
     events.iter().filter(|event| kind(event) == "final").collect()
 }
 
-/// The server refuses a second session while one holds the engine.
-fn engine_free(timeout: Duration) -> bool {
+/// `SESSIONS` ready sessions with their events, once every engine slot is free; slots of
+/// closed connections are released when their recognition jobs end.
+fn hold_all(timeout: Duration) -> Option<(Vec<Client>, Vec<Vec<Value>>)> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
-        let mut client = Client::connect(json!({}));
-        let free = kind(&client.recv()) != "error";
-        client.close();
-        if free {
-            return true;
+        let mut clients: Vec<Client> = (0..SESSIONS).map(|_| Client::connect(json!({}))).collect();
+        let events: Vec<Vec<Value>> = clients.iter_mut().map(Client::until_ready).collect();
+        if events.iter().all(|events| kind(events.last().unwrap()) == "ready") {
+            return Some((clients, events));
         }
+        clients.into_iter().for_each(Client::close);
         std::thread::sleep(Duration::from_millis(200));
     }
-    false
+    None
+}
+
+/// Every engine slot is free.
+fn engine_free(timeout: Duration) -> bool {
+    hold_all(timeout).map(|(clients, _)| clients.into_iter().for_each(Client::close)).is_some()
 }
 
 fn run(audio: &[u8], speakers: Value, expect_live: bool) -> Vec<Value> {
@@ -297,7 +305,27 @@ fn cancellation_releases_engine(vi: &[u8]) {
     assert_eq!(kind(events.last().unwrap()), "done");
 }
 
-/// One test: the server allows one session at a time on a fixed port.
+/// `SESSIONS` sessions recognize at once; one more is refused with an `error` event.
+fn concurrent_sessions(vi: &[u8]) {
+    let (mut clients, mut events) = hold_all(Duration::from_secs(10)).expect("engine slots not released");
+    let mut extra = Client::connect(json!({}));
+    let refused = extra.until_ready();
+    assert_eq!(kind(refused.last().unwrap()), "error", "{refused:?}");
+    extra.close();
+    for client in &mut clients {
+        client.send_pcm(vi);
+        client.end();
+    }
+    for (client, events) in clients.iter_mut().zip(&mut events) {
+        client.rest(events);
+        assert_eq!(kind(events.last().unwrap()), "done", "{events:?}");
+        assert!(finals(events).iter().any(|event| text(event).contains("đất nước")), "{events:?}");
+    }
+    clients.into_iter().for_each(Client::close);
+    assert!(engine_free(Duration::from_secs(10)), "Session slot leaked");
+}
+
+/// One test: the server limits concurrent sessions on a fixed port.
 #[test]
 #[ignore = "needs downloaded models and build/onplay-server"]
 fn streaming_socket() {
@@ -305,6 +333,7 @@ fn streaming_socket() {
     let en = pcm(&root().join(MODEL).join("test_wavs/en.wav"));
     let _server = Server::start();
     live_stream(&vi);
+    concurrent_sessions(&vi);
     two_speakers(&vi, &en);
     live_speaker_mode(&vi, &en);
     disabled_mode(&vi);

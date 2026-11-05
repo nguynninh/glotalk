@@ -4,11 +4,11 @@ Tài liệu này dành cho ứng dụng kết nối tới dịch vụ công khai
 
 ## Kết nối
 
-- WebSocket URL: `wss://stt.qiverse.top/ws`
+- WebSocket URL: `wss://stt.qiverse.top`
 - Gửi Origin: `https://stt.qiverse.top`
 - Âm thanh đầu vào: PCM signed 16-bit little-endian, mono, 16 kHz; không gửi header WAV.
 
-Máy chủ chấp nhận một phiên nhận dạng tại một thời điểm. Ứng dụng nên báo cho người dùng nếu nhận sự kiện `error` nói rằng engine đang bận, và cho phép thử lại sau.
+Mỗi kết nối WebSocket là một phiên. Máy chủ chạy đồng thời tối đa `ONPLAY_MAX_SESSIONS` phiên nhận dạng (mặc định 4); kết nối vượt giới hạn nhận sự kiện `error` trước `ready` rồi bị đóng. Ứng dụng nên báo cho người dùng rằng máy chủ đang đầy và cho phép thử lại sau.
 
 ## Bắt đầu phiên
 
@@ -82,8 +82,8 @@ Nếu chọn `audio_encoding: "binary"`, sự kiện âm thanh được gửi th
 
 ## Xử lý lỗi
 
-- Không mở được kết nối: kiểm tra mạng và thử lại `wss://stt.qiverse.top/ws`.
-- Nhận `error` trước `ready`: cấu hình không hợp lệ, máy chủ đang bận hoặc thiếu dịch vụ phụ trợ cần thiết.
+- Không mở được kết nối: kiểm tra mạng và thử lại `wss://stt.qiverse.top`.
+- Nhận `error` trước `ready`: cấu hình không hợp lệ, máy chủ đã đủ số phiên đồng thời hoặc thiếu dịch vụ phụ trợ cần thiết.
 - Không thấy `ready`: chờ sự kiện `status`; nếu phiên bị đóng hoặc quá thời gian, kết nối lại và gửi cấu hình đầu tiên.
 - Ngừng nhận âm thanh: gửi `{"type":"end"}` để máy chủ hoàn tất và trả `done`.
 

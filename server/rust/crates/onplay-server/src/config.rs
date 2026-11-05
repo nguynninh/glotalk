@@ -12,6 +12,9 @@ const STT_MODEL: &str = "models/sherpa-onnx-streaming-zipformer-ar_en_id_ja_ru_t
 const SEGMENTATION: &str = "models/speakers/sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx";
 const EMBEDDING: &str = "models/speakers/embedding.onnx";
 const TRANSLATE_URL: &str = "http://127.0.0.1:5002";
+/// Each concurrent session may load its own streaming engine (about 340 MB per recognizer
+/// configuration in use).
+const MAX_SESSIONS: usize = 4;
 
 /// `ONPLAY_CAPTURE_AUDIO`: `0` nothing (default), `1` transcript and audio, `2` transcript
 /// only, `3` audio only. A client can still ask for its own transcript with `store: true`.
@@ -59,11 +62,19 @@ pub struct Config {
     pub session_dir: PathBuf,
     /// `ONPLAY_CAPTURE_AUDIO`: what to store for every session.
     pub capture: Capture,
+    /// `ONPLAY_MAX_SESSIONS`: recognition sessions served at once; more are refused.
+    pub max_sessions: usize,
+}
+
+/// A positive session count; `None` otherwise.
+pub fn parse_max_sessions(value: &str) -> Option<usize> {
+    value.trim().parse().ok().filter(|count| *count > 0)
 }
 
 impl Config {
     /// Paths under the project `root`, overridden by `ONPLAY_PUBLIC_ORIGIN`,
-    /// `ONPLAY_TRANSLATE_URL`, `ONPLAY_SESSION_DIR` and `ONPLAY_CAPTURE_AUDIO`.
+    /// `ONPLAY_TRANSLATE_URL`, `ONPLAY_SESSION_DIR`, `ONPLAY_CAPTURE_AUDIO` and
+    /// `ONPLAY_MAX_SESSIONS`.
     pub fn from_env(root: &Path) -> Self {
         let env = |name: &str| std::env::var(name).ok();
         let model = root.join(STT_MODEL);
@@ -83,6 +94,7 @@ impl Config {
             translate_url: env("ONPLAY_TRANSLATE_URL").unwrap_or_else(|| TRANSLATE_URL.to_owned()),
             session_dir: env("ONPLAY_SESSION_DIR").map_or_else(|| root.join("sessions"), PathBuf::from),
             capture: env("ONPLAY_CAPTURE_AUDIO").as_deref().and_then(Capture::parse).unwrap_or_default(),
+            max_sessions: env("ONPLAY_MAX_SESSIONS").as_deref().and_then(parse_max_sessions).unwrap_or(MAX_SESSIONS),
         }
     }
 }
@@ -100,5 +112,12 @@ mod tests {
         assert!(Capture::Transcript.transcript() && !Capture::Transcript.audio());
         assert!(!Capture::Audio.transcript() && Capture::Audio.audio());
         assert!(!Capture::Off.transcript() && !Capture::Off.audio());
+    }
+
+    #[test]
+    fn parses_max_sessions() {
+        assert_eq!(parse_max_sessions(" 3\n"), Some(3));
+        assert_eq!(parse_max_sessions("0"), None);
+        assert_eq!(parse_max_sessions("many"), None);
     }
 }

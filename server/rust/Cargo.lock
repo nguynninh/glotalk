@@ -1650,7 +1650,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
 name = "onplay-dub"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-tts",
  "serde",
@@ -1662,14 +1662,14 @@ dependencies = [
 
 [[package]]
 name = "onplay-dub-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-dub",
 ]
 
 [[package]]
 name = "onplay-server"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "base64 0.22.1",
  "onplay-stt",
@@ -1684,7 +1684,7 @@ dependencies = [
 
 [[package]]
 name = "onplay-server-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-server",
  "onplay-tts",
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "onplay-sherpa"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-sherpa-sys",
  "thiserror 2.0.21",
@@ -1702,14 +1702,14 @@ dependencies = [
 
 [[package]]
 name = "onplay-sherpa-sys"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "bindgen",
 ]
 
 [[package]]
 name = "onplay-stt"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-sherpa",
  "thiserror 2.0.21",
@@ -1717,14 +1717,14 @@ dependencies = [
 
 [[package]]
 name = "onplay-stt-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-stt",
 ]
 
 [[package]]
 name = "onplay-translation"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "candle-core",
  "candle-nn",
@@ -1743,7 +1743,7 @@ dependencies = [
 
 [[package]]
 name = "onplay-translation-bench"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1753,14 +1753,14 @@ dependencies = [
 
 [[package]]
 name = "onplay-translation-bench-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-translation-bench",
 ]
 
 [[package]]
 name = "onplay-translation-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-translation",
  "serde",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "onplay-tts"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "ort",
  "rand 0.8.8",
@@ -1783,7 +1783,7 @@ dependencies = [
 
 [[package]]
 name = "onplay-tts-cli"
-version = "1.0.0"
+version = "1.0.2"
 dependencies = [
  "onplay-tts",
  "serde",
