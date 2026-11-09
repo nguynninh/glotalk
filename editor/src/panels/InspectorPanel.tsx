@@ -3,8 +3,8 @@ import { api, formatTime, formatTimecode, OcrModel, STT_LANGUAGES, ToolStatus } 
 import { defaultSubStyle, SubStyle } from "../lib/subStyle";
 import { ColorGrade, defaultGrade } from "../lib/colorGrade";
 import { InspectorTab, timelineEnd, useEditor } from "../store/editor";
-import { ChromaKey, ClipFx, clipFx, trackCode } from "../lib/timeline";
-import { applyPronounsToAll, cancelOcr, cancelRender, cancelSpeakers, cancelStt, cancelTranslate, chooseOutDir, detectSpeakers, ExportRes, exportVideo, extractAudioForStt, runOcr, runStt, runTranslate } from "../store/actions";
+import { ChromaKey, ClipFx, clipFx, DUCK_GAIN, trackCode } from "../lib/timeline";
+import { applyPronounsToAll, cancelDub, cancelOcr, cancelRender, cancelSpeakers, cancelStt, cancelTranslate, chooseOutDir, detectSpeakers, ExportRes, exportVideo, extractAudioForStt, runDub, runOcr, runStt, runTranslate } from "../store/actions";
 import { Gender, VOICES, voiceName } from "../lib/speakers";
 import { ANYONE, listenerOf, PronounRule } from "../lib/pronouns";
 import { Panel } from "../components/Panel";
@@ -14,6 +14,7 @@ import { TKey, useLangName, useT } from "../i18n";
 const TABS: { id: InspectorTab; label: TKey }[] = [
   { id: "caption", label: "insp.tabCaption" },
   { id: "speakers", label: "insp.tabSpeakers" },
+  { id: "dub", label: "insp.tabDub" },
   { id: "style", label: "insp.tabStyle" },
   { id: "color", label: "insp.tabColor" },
   { id: "detect", label: "insp.tabDetect" },
@@ -29,6 +30,7 @@ export function InspectorPanel() {
     <Panel tabs={TABS.map((x) => ({ id: x.id, label: t(x.label) }))} active={tab} onTab={(id) => set({ inspectorTab: id })} className="inspector">
       {tab === "caption" && <CaptionTab />}
       {tab === "speakers" && <SpeakersTab />}
+      {tab === "dub" && <DubTab />}
       {tab === "style" && <StyleTab />}
       {tab === "color" && <ColorTab />}
       {tab === "detect" && <DetectTab />}
@@ -299,6 +301,67 @@ function SpeakersTab() {
 }
 
 /** Bảng xưng hô theo cặp nhân vật, áp sau khi dịch sang tiếng Việt. */
+/** KorvaTTS chỉ đọc được tiếng Việt và tiếng Anh (`speech/voices.rs` của server). */
+const DUB_LANGUAGES = ["vi", "en"] as const;
+
+function DubTab() {
+  const video = useEditor((s) => s.video);
+  const segments = useEditor((s) => s.segments);
+  const speakers = useEditor((s) => s.speakers);
+  const run = useEditor((s) => s.dub);
+  const dubTrack = useEditor((s) => s.tracks.find((x) => x.dub));
+  const busy = useEditor((s) => s.translate.running || s.stt.running || s.ocr.running);
+  const [language, setLanguage] = useState<string>("vi");
+  const [voice, setVoice] = useState(VOICES[0].id);
+  const t = useT();
+  const langName = useLangName();
+  const lines = segments.filter((x) => x.vi.trim() && x.end > x.start);
+  const free = lines.filter((x) => !x.speaker || !speakers.some((sp) => sp.id === x.speaker)).length;
+  return (
+    <div className="props">
+      <PropGroup title={t("dub.title")}>
+        <p className="muted small">{t("dub.hint")}</p>
+        <Prop label={t("dub.language")}>
+          <select value={language} onChange={(e) => setLanguage(e.target.value)} disabled={run.running}>
+            {DUB_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+          </select>
+        </Prop>
+        <Prop label={t("dub.defaultVoice")}>
+          <select value={voice} onChange={(e) => setVoice(e.target.value)} disabled={run.running}>
+            {VOICES.map((v) => <option key={v.id} value={v.id}>{voiceName(v.id)} · {t(v.gender === "male" ? "spk.male" : "spk.female")}</option>)}
+          </select>
+        </Prop>
+        <p className="muted small">{t("dub.defaultVoiceHint")}</p>
+        {dubTrack && (
+          <>
+            <Prop label={t("dub.duck")}>
+              <Slider value={dubTrack.duck ?? DUCK_GAIN} min={0} max={1} step={0.01} def={DUCK_GAIN} format={(v) => `${Math.round(v * 100)}%`}
+                onChange={(v) => useEditor.getState().setTrack(dubTrack.id, { duck: v })} />
+            </Prop>
+            <p className="muted small">{t("dub.duckHint")}</p>
+          </>
+        )}
+        <p className="muted small">{t("dub.stats", { n: lines.length, free })}</p>
+      </PropGroup>
+      <div className="ocr-run">
+        {run.running ? (
+          <>
+            <div className="ocr-status">
+              <span>{run.phase === "mix" ? t("dub.mixing") : t("dub.speaking", { done: run.done, total: run.total })}</span>
+            </div>
+            <div className="bar"><div style={{ width: `${run.total ? Math.min(100, (run.done / run.total) * 100) : 0}%` }} /></div>
+            <button onClick={cancelDub}>{t("insp.cancel")}</button>
+          </>
+        ) : (
+          <button className="primary big" disabled={!video || !lines.length || busy} onClick={() => runDub({ language, voice })}>
+            {t("dub.run", { n: lines.length })}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PronounsGroup() {
   const speakers = useEditor((s) => s.speakers);
   const rules = useEditor((s) => s.pronouns);

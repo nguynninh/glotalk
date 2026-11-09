@@ -1,5 +1,5 @@
 //! Đăng nhập tài khoản editor qua server Glotalk (`/auth/` của onplay-server, xem `server/src/auth.rs`),
-//! và dịch phụ đề bằng token đó (`POST /translate`, cùng cổng HTTP).
+//! dịch phụ đề (`POST /translate`) và đọc câu lồng tiếng (`POST /speak`) bằng token đó, cùng cổng HTTP.
 //!
 //! Chạy bên Rust như STT: webview gọi thẳng sang domain khác sẽ vướng CORS.
 //! Lỗi sai tài khoản/khoá tạm trả về khoá i18n (`login.*`) để màn đăng nhập dịch theo ngôn ngữ đang chọn.
@@ -123,6 +123,32 @@ pub fn translate(server: &str, token: &str, source: &str, target: &str, texts: &
         (401, _) => Err(AppError::Other("tr.signIn".into())),
         // Server cũ chưa có `/translate`, hoặc tunnel chưa chuyển `/translate` sang cổng 8767.
         (404, _) => Err(AppError::Other("tr.noApi".into())),
+        (status, v) => Err(unexpected(status, &v)),
+    }
+}
+
+/// Đọc một câu lồng tiếng (`POST /speak`): WAV PCM16 mono của server.
+/// `max_seconds` để server tăng tốc (tối đa 2x) cho vừa; câu vẫn có thể dài hơn.
+/// Lỗi chung trả về khoá i18n (`dub.*`); lỗi riêng của câu trả về thông báo của server.
+pub fn speak(server: &str, token: &str, language: &str, text: &str, voice: &str, max_seconds: f64) -> AppResult<Vec<u8>> {
+    let url = format!("{}/speak", base(server)?);
+    let body = json!({ "language": language, "text": text, "voice": voice, "max_seconds": max_seconds }).to_string();
+    let agent: ureq::Agent = ureq::Agent::config_builder().timeout_global(Some(Duration::from_secs(120))).http_status_as_error(false).build().into();
+    let mut response = agent
+        .post(&url)
+        .header("Authorization", &format!("Bearer {token}"))
+        .header("Content-Type", "application/json")
+        .send(body.as_str())
+        .map_err(net)?;
+    if response.status().as_u16() == 200 {
+        return response.body_mut().with_config().limit(64 * 1024 * 1024).read_to_vec().map_err(net);
+    }
+    match read(response)? {
+        (401, _) => Err(AppError::Other("dub.signIn".into())),
+        // Server cũ chưa có `/speak`, hoặc tunnel chưa chuyển `/speak` sang cổng 8767.
+        (404, _) => Err(AppError::Other("dub.noApi".into())),
+        (503, _) => Err(AppError::Other("dub.unavailable".into())),
+        (400, v) if v["code"] == "invalid_speech" => Err(AppError::Other(format!("Server từ chối câu: {}", v["text"].as_str().unwrap_or("?")))),
         (status, v) => Err(unexpected(status, &v)),
     }
 }

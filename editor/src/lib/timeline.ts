@@ -14,6 +14,8 @@ export interface Track {
   name: string;
   /** Track lồng tiếng mặc định (đích của bước TTS). */
   dub?: boolean;
+  /** Track lồng tiếng: âm lượng còn lại 0..1 của các track khác khi có giọng lồng tiếng; thiếu là DUCK_GAIN. */
+  duck?: number;
   /** Do app tự tạo khi thả/thêm clip mà không còn chỗ: tự bỏ đi khi không còn clip nào. */
   auto?: boolean;
   /** Track phụ đề: `hidden` là ẩn bản dịch, `srcHidden` là ẩn câu gốc. */
@@ -52,6 +54,64 @@ export interface Clip {
   text?: string;
   /** Hiệu ứng; thiếu trường nào thì dùng giá trị trong DEFAULT_FX. */
   fx?: Partial<ClipFx>;
+  /** Clip lồng tiếng: khoảng có giọng [bắt đầu, kết thúc) tính bằng ms trong file nguồn, để hạ âm các track khác. */
+  speech?: [number, number][];
+}
+
+/** Âm lượng còn lại của âm gốc khi có giọng lồng tiếng, như `--background` của onplay-dub. */
+export const DUCK_GAIN = 0.15;
+
+/**
+ * Khoảng cần hạ âm trên timeline: giọng của các clip lồng tiếng đang nghe được, đã dời theo vị trí clip
+ * và cắt theo phần clip đang dùng. Trả về `gain` của track lồng tiếng đầu tiên có giọng.
+ */
+export function duckSpans(tracks: Track[], clips: Clip[]): { gain: number; spans: [number, number][] } | null {
+  const spans: [number, number][] = [];
+  let gain: number | null = null;
+  for (const c of clips) {
+    const tk = tracks.find((t) => t.id === c.trackId);
+    if (!tk?.dub || !c.speech?.length || !trackAudible(tracks, tk)) continue;
+    gain ??= tk.duck ?? DUCK_GAIN;
+    for (const [a, b] of c.speech) {
+      const s = Math.max(a, c.in) - c.in + c.start;
+      const e = Math.min(b, c.in + c.dur) - c.in + c.start;
+      if (e > s) spans.push([s, e]);
+    }
+  }
+  if (gain === null || !spans.length) return null;
+  spans.sort((x, y) => x[0] - y[0]);
+  const merged: [number, number][] = [];
+  for (const sp of spans) {
+    const last = merged[merged.length - 1];
+    if (last && sp[0] <= last[1]) last[1] = Math.max(last[1], sp[1]);
+    else merged.push([...sp]);
+  }
+  return { gain, spans: merged };
+}
+
+/** Thời gian hạ dần trước khi giọng bắt đầu và trả dần sau khi dứt (ms), như `DUCK_DOWN_S`/`DUCK_UP_S` khi xuất. */
+const DUCK_DOWN_MS = 150;
+const DUCK_UP_MS = 300;
+
+/** Hệ số âm lượng của các track khác tại `ms` (1 = không hạ); `spans` tăng dần như `duckSpans` trả về. */
+export function duckLevel(duck: { gain: number; spans: [number, number][] } | null, ms: number): number {
+  if (!duck) return 1;
+  const { gain: g, spans } = duck;
+  // Khoảng cuối cùng đã bắt đầu hạ (tìm nhị phân).
+  let lo = 0;
+  let hi = spans.length - 1;
+  let at = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (spans[mid][0] - DUCK_DOWN_MS <= ms) {
+      at = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  if (at < 0) return 1;
+  const [s, e] = spans[at];
+  if (ms <= e) return Math.max(g, 1 - ((ms - (s - DUCK_DOWN_MS)) / DUCK_DOWN_MS) * (1 - g));
+  return Math.min(1, g + ((ms - e) / DUCK_UP_MS) * (1 - g));
 }
 
 export interface ChromaKey {

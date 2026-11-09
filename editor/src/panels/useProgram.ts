@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { Compositor, Layer } from "../lib/compositor";
-import { Clip, clipAt, clipFx, MediaAsset, Track, trackAudible } from "../lib/timeline";
+import { Clip, clipAt, clipFx, duckLevel, duckSpans, MediaAsset, Track, trackAudible } from "../lib/timeline";
 import { sequenceSize, timelineEnd, useEditor } from "../store/editor";
 
 type Media = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
@@ -60,6 +60,8 @@ export function useProgram(
     let anchor = { perf: performance.now(), ms: S().time };
     let wasPlaying = false;
     let seekN = S().seekTo?.n ?? 0;
+    // Khoảng hạ âm chỉ tính lại khi track/clip đổi, không phải mỗi khung hình.
+    let duckFor: { tracks: Track[] | null; clips: Clip[] | null; duck: ReturnType<typeof duckSpans> } = { tracks: null, clips: null, duck: null };
     const unsub = useEditor.subscribe((s, p) => {
       if (s.time !== p.time || s.clips !== p.clips || s.tracks !== p.tracks || s.assets !== p.assets || s.mix !== p.mix || s.video !== p.video)
         dirty = true;
@@ -169,6 +171,8 @@ export function useProgram(
       seekN = seekNow;
 
       // Đồng bộ các phần tử media với đồng hồ.
+      if (duckFor.tracks !== s.tracks || duckFor.clips !== s.clips) duckFor = { tracks: s.tracks, clips: s.clips, duck: duckSpans(s.tracks, s.clips) };
+      const duck = duckLevel(duckFor.duck, now);
       const assets = new Map(s.assets.map((a) => [a.id, a]));
       const tracks = new Map(s.tracks.map((t) => [t.id, t]));
       const keep = new Set<string>();
@@ -190,7 +194,7 @@ export function useProgram(
         const target = active ? (now - c.start + c.in) / 1000 : c.in / 1000;
         if (el instanceof HTMLAudioElement) {
           const fx = clipFx(c);
-          const vol = s.mix.masterMuted || !trackAudible(s.tracks, tk) ? 0 : Math.min(1, s.mix.master * tk.gain * fx.volume);
+          const vol = s.mix.masterMuted || !trackAudible(s.tracks, tk) ? 0 : Math.min(1, s.mix.master * tk.gain * fx.volume * (tk.dub ? 1 : duck));
           const [gl, gr] = [tk.gainL ?? 1, tk.gainR ?? 1];
           if (routes.has(c.id) || gl !== 1 || gr !== 1) {
             const rt = route(c.id, el);

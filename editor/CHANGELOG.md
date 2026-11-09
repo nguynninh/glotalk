@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-09
+
+Dubbing through the Glotalk server, using the speakers and voices from 0.3.0.
+Needs a server with `POST /speak`.
+
+### Added
+
+- "Lồng tiếng" tab in the Inspector: every translated caption is read on the
+  Glotalk server (`POST /speak`, sign-in required) with its speaker's KorvaTTS
+  voice, or a default voice for lines without a speaker, in Vietnamese or English.
+  Each line may be sped up to 2x to end before the next caption; lines that still
+  overlap are listed in the log. The lines are joined into one `.m4a` placed from
+  0 on the dub track, replacing the previous dub. Spoken lines are cached in
+  `work/dub-cache/`, so running again only reads lines whose text, voice or timing
+  changed.
+- While the dubbed voice speaks, other audio tracks are lowered to "Âm gốc khi có
+  giọng" (default 15%), in playback and in the exported video, with short fades.
+
 ## [0.3.1] - 2026-11-09
 
 ### Fixed
@@ -181,7 +199,8 @@ First release. Earlier `0.1.0` builds were never published.
   token and the remembered sign-in token are stored unencrypted in
   `localStorage`.
 
-[Unreleased]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.1...HEAD
+[Unreleased]: https://github.com/nguynninh/glotalk/compare/editor/v0.4.0...HEAD
+[0.4.0]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.1...editor/v0.4.0
 [0.3.1]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.0...editor/v0.3.1
 [0.3.0]: https://github.com/nguynninh/glotalk/compare/editor/v0.2.0...editor/v0.3.0
 [0.2.0]: https://github.com/nguynninh/glotalk/releases/tag/editor/v0.2.0

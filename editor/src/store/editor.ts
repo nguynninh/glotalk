@@ -51,7 +51,15 @@ export interface SpeakersRun {
   total: number;
 }
 
-export type InspectorTab = "caption" | "speakers" | "style" | "color" | "detect" | "export";
+/** Lồng tiếng qua server (`runDub`). */
+export interface DubState {
+  running: boolean;
+  phase: "idle" | "speak" | "mix";
+  done: number;
+  total: number;
+}
+
+export type InspectorTab = "caption" | "speakers" | "dub" | "style" | "color" | "detect" | "export";
 
 export interface AudioMix {
   /** Âm lượng tổng khi xem, 0..1 */
@@ -131,6 +139,7 @@ interface EditorState {
   ocrResume: OcrResume | null;
   stt: SttState;
   translate: TranslateState;
+  dub: DubState;
 
   set: (p: Partial<EditorState>) => void;
   log: (msg: string) => void;
@@ -209,6 +218,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   ocrResume: null,
   stt: { running: false, phase: "idle", doneS: 0, totalS: 0, lastText: "" },
   translate: { running: false, done: 0, total: 0 },
+  dub: { running: false, phase: "idle", done: 0, total: 0 },
 
   set: (p) => set(p),
   log: (msg) => set((s) => ({ logs: [...s.logs.slice(-499), `[${now()}] ${msg}`] })),

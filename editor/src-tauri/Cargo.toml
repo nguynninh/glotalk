@@ -1,6 +1,6 @@
 [package]
 name = "glotalk-editor"
-version = "0.3.1"
+version = "0.4.0"
 description = "Glotalk Editor - OCR, dịch, lồng tiếng và xuất video"
 authors = ["Glotalk"]
 edition = "2024"

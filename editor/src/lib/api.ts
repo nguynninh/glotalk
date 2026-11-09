@@ -113,6 +113,8 @@ export interface RenderAudio {
   volume: number;
   volumeL: number;
   volumeR: number;
+  /** Clip của track lồng tiếng: không bị hạ theo `duck`. */
+  dub: boolean;
 }
 export interface RenderJob {
   output: string;
@@ -125,6 +127,8 @@ export interface RenderJob {
   audio: RenderAudio[];
   graphics: string | null;
   grade: { r: number; g: number; b: number; contrast: number; saturation: number } | null;
+  /** Hạ các clip không phải lồng tiếng xuống `gain` trong `spans` (ms trên timeline). */
+  duck: { gain: number; spans: [number, number][] } | null;
 }
 export interface RenderProgress {
   doneMs: number;
@@ -186,6 +190,40 @@ export interface SpeakersProgress {
   total: number;
 }
 
+/** Khớp `dub::DubJob`/`DubOutput`/`DubProgress` (camelCase). */
+export interface DubLine {
+  id: number;
+  startMs: number;
+  endMs: number;
+  text: string;
+  voice: string;
+}
+export interface DubJob {
+  server: string;
+  token: string;
+  language: string;
+  lines: DubLine[];
+  totalMs: number;
+  cacheDir: string;
+  output: string;
+  /** File lồng tiếng cũ, xoá sau khi xong (chỉ `.m4a` cùng thư mục với `output`). */
+  replace: string[];
+}
+export interface DubOutput {
+  output: string;
+  spoken: number;
+  cached: number;
+  failed: { id: number; error: string }[];
+  overrun: number[];
+  /** Khoảng có giọng lồng tiếng, ms từ đầu file. */
+  spans: [number, number][];
+}
+export interface DubProgress {
+  phase: "speak" | "mix";
+  done: number;
+  total: number;
+}
+
 /** Server công khai (onplay-server); đổi trong Cài đặt. */
 export const DEFAULT_SERVER = "https://stt.qiverse.top";
 /** Ngôn ngữ server nhận dạng/dịch được (`server/docs/streaming-audio.md`). */
@@ -212,6 +250,8 @@ export const api = {
   sttCancel: () => invoke<void>("stt_cancel"),
   speakersDetect: (job: SpeakersJob) => invoke<SpeakersOutcome>("speakers_detect", { job }),
   speakersCancel: () => invoke<void>("speakers_cancel"),
+  dubSpeak: (job: DubJob) => invoke<DubOutput>("dub_speak", { job }),
+  dubCancel: () => invoke<void>("dub_cancel"),
   readText: (path: string) => invoke<string>("read_text", { path }),
   writeText: (path: string, content: string) => invoke<void>("write_text", { path, content }),
   /** Tạo thư mục dự án (kèm `work/`, `export/`), trả về đường dẫn file `.glotalk` bên trong. */

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Hero } from "../components/Hero";
 import { api } from "../lib/api";
 import { newProject, openProject, openProjectFile, recentProjects, removeRecentProject } from "../store/actions";
 import { useEditor } from "../store/editor";
@@ -113,10 +114,7 @@ export function Welcome({ onOpen, onLogout }: { onOpen: () => void; onLogout: ()
           <span className="login-ver">v{pkg.version}</span>
         </footer>
       </aside>
-      <section className="welcome-hero" data-tauri-drag-region>
-        <img src="/logo.png" alt="" draggable={false} />
-        <p>{t("welcome.tagline")}</p>
-      </section>
+      <Hero tagline={t("welcome.tagline")} />
     </div>
   );
 }

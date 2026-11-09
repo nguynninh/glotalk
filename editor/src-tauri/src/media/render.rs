@@ -54,7 +54,25 @@ pub struct AudioClip {
     pub volume_l: f64,
     #[serde(default = "unity")]
     pub volume_r: f64,
+    /// Clip của track lồng tiếng: không bị hạ khi `duck` bật.
+    #[serde(default)]
+    pub dub: bool,
 }
+
+/// Hạ âm các clip không phải lồng tiếng trong những khoảng có giọng lồng tiếng.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DuckSpec {
+    /// Âm lượng còn lại 0..1
+    pub gain: f64,
+    /// [bắt đầu, kết thúc) theo ms trên timeline, tăng dần, không chồng nhau.
+    pub spans: Vec<[u64; 2]>,
+}
+
+/// Hạ dần trong chừng này trước khi giọng lồng tiếng bắt đầu, rồi trả lại dần sau khi dứt,
+/// để không nghe thấy tiếng "bụp" khi âm lượng đổi đột ngột.
+const DUCK_DOWN_S: f64 = 0.15;
+const DUCK_UP_S: f64 = 0.3;
 
 fn unity() -> f64 {
     1.0
@@ -86,6 +104,8 @@ pub struct RenderJob {
     /// File ffconcat chứa chuỗi PNG chữ/phụ đề phủ lên trên cùng (sau chỉnh màu).
     pub graphics: Option<String>,
     pub grade: Option<GradeSpec>,
+    #[serde(default)]
+    pub duck: Option<DuckSpec>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -114,8 +134,29 @@ fn layer_rect(l: &VideoLayer, w: u32, h: u32) -> (u32, u32, i64, i64) {
     (lw, lh, x, y)
 }
 
+/// Lệnh `asendcmd` đổi biểu thức của `volume@duck` (eval=frame): mỗi khoảng hạ dần về `gain`
+/// ngay trước khi giọng lồng tiếng bắt đầu và trả dần về 1 sau khi dứt.
+pub fn duck_commands(duck: &DuckSpec) -> String {
+    let g = duck.gain.clamp(0.0, 1.0);
+    let mut out = String::new();
+    for &[start, end] in &duck.spans {
+        if end <= start {
+            continue;
+        }
+        let a = (start as f64 / 1000.0 - DUCK_DOWN_S).max(0.0);
+        let b = end as f64 / 1000.0;
+        out += &format!(
+            "{a:.3}-{b:.3} [enter] volume@duck volume 'max({g:.4},1-(t-{a:.3})*{:.4})', [leave] volume@duck volume 'min(1,{g:.4}+(t-{b:.3})*{:.4})';\n",
+            (1.0 - g) / DUCK_DOWN_S,
+            (1.0 - g) / DUCK_UP_S
+        );
+    }
+    out
+}
+
 /// Đối số ffmpeg (không gồm tên chương trình). Tách riêng để kiểm thử được mà không chạy ffmpeg.
-pub fn build_args(job: &RenderJob) -> AppResult<Vec<String>> {
+/// `duck_file`: file lệnh của `duck_commands`, cần khi job có `duck`.
+pub fn build_args(job: &RenderJob, duck_file: Option<&str>) -> AppResult<Vec<String>> {
     if !ENCODERS.contains(&job.encoder.as_str()) {
         return Err(AppError::Other(format!("Encoder không hỗ trợ: {}", job.encoder)));
     }
@@ -188,8 +229,14 @@ pub fn build_args(job: &RenderJob) -> AppResult<Vec<String>> {
     f.push(format!("[{base}]format=yuv420p[vout]"));
 
     // Âm thanh: mỗi clip cắt, chỉnh âm lượng, dời tới vị trí rồi trộn; có thêm nền im lặng để luôn có track tiếng đủ dài.
+    // Có `duck`: nền và các clip thường trộn riêng, qua `volume@duck`, rồi mới trộn với clip lồng tiếng.
+    let duck = job.duck.as_ref().filter(|d| !d.spans.is_empty() && job.audio.iter().any(|c| c.dub));
+    if duck.is_some() && duck_file.is_none_or(|f| f.contains(['\'', '\\'])) {
+        return Err(AppError::Other("Thiếu file lệnh hạ âm hoặc đường dẫn không hợp lệ".into()));
+    }
     input(vec!["-f".into(), "lavfi".into(), "-t".into(), total.clone(), "-i".into(), "anullsrc=r=48000:cl=stereo".into()], &mut a);
     let mut mix = vec![format!("[{n}:a]")];
+    let mut dubbed = Vec::new();
     n += 1;
     for (k, c) in job.audio.iter().enumerate() {
         input(vec!["-ss".into(), secs(c.in_ms), "-t".into(), secs(c.dur_ms), "-i".into(), c.path.clone()], &mut a);
@@ -204,8 +251,13 @@ pub fn build_args(job: &RenderJob) -> AppResult<Vec<String>> {
             c.volume.max(0.0),
             c.start_ms
         ));
-        mix.push(format!("[a{k}]"));
+        if duck.is_some() && c.dub { dubbed.push(format!("[a{k}]")) } else { mix.push(format!("[a{k}]")) }
         n += 1;
+    }
+    if let Some(file) = duck_file.filter(|_| duck.is_some()) {
+        f.push(format!("{}amix=inputs={}:normalize=0:duration=first,asendcmd=f='{file}',volume@duck=volume=1:eval=frame[bg]", mix.join(""), mix.len()));
+        mix = vec!["[bg]".into()];
+        mix.extend(dubbed);
     }
     f.push(format!("{}amix=inputs={}:normalize=0:duration=first[aout]", mix.join(""), mix.len()));
 
@@ -237,7 +289,17 @@ impl Drop for ChildGuard {
 }
 
 pub fn run(job: &RenderJob, cancel: &AtomicBool, mut progress: impl FnMut(RenderProgress)) -> AppResult<()> {
-    let args = build_args(job)?;
+    // File lệnh hạ âm nằm cạnh file xuất tạm thời; quá dài để đưa thẳng vào `filter_complex`.
+    let duck_file = match &job.duck {
+        Some(d) if !d.spans.is_empty() => {
+            let path = std::env::temp_dir().join("glotalk-editor").join(format!("duck-{}.cmd", std::process::id()));
+            std::fs::create_dir_all(path.parent().expect("temp"))?;
+            std::fs::write(&path, duck_commands(d))?;
+            Some(path.to_string_lossy().into_owned())
+        }
+        _ => None,
+    };
+    let args = build_args(job, duck_file.as_deref())?;
     let child = Command::new(find_tool("ffmpeg")?)
         .args(&args)
         .stdin(Stdio::null())
@@ -304,6 +366,7 @@ mod tests {
             audio: vec![],
             graphics: None,
             grade: None,
+            duck: None,
         }
     }
 
@@ -324,12 +387,12 @@ mod tests {
         let dir = std::env::temp_dir();
         let mut j = job(&dir);
         j.encoder = "rm -rf".into();
-        assert!(build_args(&j).is_err());
+        assert!(build_args(&j, None).is_err());
         let mut j = job(&dir);
         let mut l = layer("a");
         l.key = Some(KeySpec { color: "#00ff00;x".into(), similarity: 0.1, blend: 0.05, spill: 0.0 });
         j.layers.push(l);
-        assert!(build_args(&j).is_err());
+        assert!(build_args(&j, None).is_err());
     }
 
     /// Dựng thật một timeline nhỏ từ nguồn tạo bằng lavfi: nền + lớp phông xanh đã khoá + âm thanh.
@@ -354,7 +417,7 @@ mod tests {
         let mut g = layer(green.to_str().unwrap());
         g.key = Some(KeySpec { color: "#00ff00".into(), similarity: 0.1, blend: 0.02, spill: 0.2 });
         j.layers = vec![bg, g];
-        j.audio = vec![AudioClip { path: tone.to_str().unwrap().into(), start_ms: 500, dur_ms: 1500, in_ms: 0, volume: 0.8, volume_l: 1.0, volume_r: 0.5 }];
+        j.audio = vec![AudioClip { path: tone.to_str().unwrap().into(), start_ms: 500, dur_ms: 1500, in_ms: 0, volume: 0.8, volume_l: 1.0, volume_r: 0.5, dub: false }];
         let cancel = AtomicBool::new(false);
         let mut seen = 0;
         run(&j, &cancel, |_| seen += 1).expect("render");
@@ -414,6 +477,45 @@ mod tests {
         assert!(b > 180 && r < 80 && g < 80, "t=0.5 {r},{g},{b}");
         let (r, g, b) = pixel("2");
         assert!(r > 180 && g > 180 && b < 80, "t=2 {r},{g},{b}");
+    }
+
+    #[test]
+    fn duck_commands_ramp_around_spans() {
+        let cmds = duck_commands(&DuckSpec { gain: 0.25, spans: vec![[1000, 2000], [3000, 3000]] });
+        assert_eq!(cmds, "0.850-2.000 [enter] volume@duck volume 'max(0.2500,1-(t-0.850)*5.0000)', [leave] volume@duck volume 'min(1,0.2500+(t-2.000)*2.5000)';\n");
+    }
+
+    /// Nền 440 Hz bị hạ trong khoảng có giọng lồng tiếng, trả lại sau đó; clip lồng tiếng không bị hạ.
+    #[test]
+    fn ducks_background_under_dub() {
+        let Ok(ff) = find_tool("ffmpeg") else { return };
+        let dir = std::env::temp_dir().join("glotalk_render_duck_test");
+        std::fs::create_dir_all(&dir).unwrap();
+        let make = |args: &[&str]| assert!(Command::new(&ff).args(args).status().unwrap().success());
+        let bg = dir.join("bg.wav");
+        let voice = dir.join("voice.wav");
+        make(&["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=4", bg.to_str().unwrap()]);
+        make(&["-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=1000:d=1", voice.to_str().unwrap()]);
+        let mut j = job(&dir);
+        j.duration_ms = 4000;
+        let clip = |path: &std::path::Path, start_ms, dur_ms, dub| AudioClip { path: path.to_str().unwrap().into(), start_ms, dur_ms, in_ms: 0, volume: 1.0, volume_l: 1.0, volume_r: 1.0, dub };
+        j.audio = vec![clip(&bg, 0, 4000, false), clip(&voice, 1500, 1000, true)];
+        j.duck = Some(DuckSpec { gain: 0.1, spans: vec![[1500, 2500]] });
+        run(&j, &AtomicBool::new(false), |_| {}).expect("render");
+        // Mức của riêng tần số 440 Hz (bandpass) ở giữa ba đoạn: trước, trong và sau khoảng lồng tiếng.
+        let level = |from: &str, freq: u32| {
+            let o = Command::new(&ff)
+                .args(["-hide_banner", "-ss", from, "-t", "0.4", "-i", &j.output, "-af", &format!("bandpass=f={freq}:w=50,volumedetect"), "-f", "null", "-"])
+                .output()
+                .unwrap();
+            let err = String::from_utf8_lossy(&o.stderr).to_string();
+            let line = err.lines().find(|l| l.contains("mean_volume")).unwrap_or_else(|| panic!("{err}")).to_string();
+            line.split("mean_volume:").nth(1).unwrap().trim().trim_end_matches(" dB").parse::<f64>().unwrap()
+        };
+        let (before, during, after) = (level("0.5", 440), level("1.8", 440), level("3.3", 440));
+        assert!(before - during > 15.0, "trước {before} dB, trong {during} dB");
+        assert!((before - after).abs() < 2.0, "trước {before} dB, sau {after} dB");
+        assert!(level("1.8", 1000) > during + 10.0, "giọng lồng tiếng không bị hạ");
     }
 
     /// Dựng một job JSON do frontend tạo ra. Chạy: GLOTALK_RENDER_JOB=/đường/dẫn/job.json cargo test --lib render_job_from_env

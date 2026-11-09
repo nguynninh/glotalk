@@ -1,4 +1,5 @@
 import { FormEvent, MouseEvent, ReactNode, useEffect, useRef, useState } from "react";
+import { Hero } from "../components/Hero";
 import { lastUser, login, rememberSession, Session, setLastUser } from "../lib/auth";
 import { settingsStore } from "../lib/api";
 import { Lang, LANGS, TKey, useLang, useT } from "../i18n";
@@ -228,10 +229,7 @@ export function Login({ onLogin }: { onLogin: (s: Session) => void }) {
           </span>
         </label>
       </aside>
-      <section className="welcome-hero" data-tauri-drag-region>
-        <img src="/logo.png" alt="" draggable={false} />
-        <p>{t("welcome.tagline")}</p>
-      </section>
+      <Hero tagline={t("welcome.tagline")} />
       {devToast ? <div className="login-toast" role="status">{t("login.devMode")}</div> : null}
     </div>
   );

@@ -1,4 +1,5 @@
 mod auth;
+mod dub;
 mod commands;
 mod error;
 mod media;
@@ -38,6 +39,7 @@ pub fn run() {
         .manage(commands::RenderState::default())
         .manage(commands::SttState::default())
         .manage(commands::SpeakersState::default())
+        .manage(commands::DubState::default())
         .setup(|app| {
             if let Err(e) = prepare_models(app) {
                 eprintln!("Không chuẩn bị được model OCR: {e}");
@@ -70,6 +72,8 @@ pub fn run() {
             commands::stt_cancel,
             commands::speakers_detect,
             commands::speakers_cancel,
+            commands::dub_speak,
+            commands::dub_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -332,3 +332,36 @@ pub async fn speakers_detect(app: tauri::AppHandle, state: State<'_, SpeakersSta
 pub fn speakers_cancel(state: State<'_, SpeakersState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }
+
+// ===== Lồng tiếng =====
+
+/// Chỉ một lượt lồng tiếng một lúc; huỷ được.
+#[derive(Default)]
+pub struct DubState {
+    cancel: Arc<AtomicBool>,
+    running: AtomicBool,
+}
+
+#[tauri::command]
+pub async fn dub_speak(app: tauri::AppHandle, state: State<'_, DubState>, job: crate::dub::DubJob) -> AppResult<crate::dub::DubOutput> {
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err(crate::error::AppError::Other("Lồng tiếng đang chạy.".into()));
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+    let cancel = state.cancel.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let speak = |line: &crate::dub::DubLine, max_seconds: f64| crate::auth::speak(&job.server, &job.token, &job.language, &line.text, &line.voice, max_seconds);
+        crate::dub::run(&job, &cancel, speak, |p| {
+            let _ = app.emit("dub-progress", p);
+        })
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Other(e.to_string()));
+    state.running.store(false, Ordering::SeqCst);
+    result?
+}
+
+#[tauri::command]
+pub fn dub_cancel(state: State<'_, DubState>) {
+    state.cancel.store(true, Ordering::SeqCst);
+}

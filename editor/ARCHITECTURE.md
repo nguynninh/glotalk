@@ -108,8 +108,22 @@ Language (`useLang`) and theme (`useTheme`) are separate small stores.
 - **Tracks, clips and assets (in progress).** Imported media become `assets`.
   Placing a video with sound creates a video clip and a linked audio clip that
   move, split and delete together. Tracks can be hidden, locked, muted or soloed
-  and have a gain. One audio track is marked `dub`, the target of the future TTS
+  and have a gain. One audio track is marked `dub`, the target of the dubbing
   step. Times are integer milliseconds; `in` is the offset into the source file.
+- **Dubbing.** `runDub` sends every caption with a translation to `dub_speak`
+  (`dub.rs`) with its speaker's KorvaTTS voice (or the default voice). Rust calls
+  the server's `POST /speak` once per line, two at a time, with the time until the
+  next caption as `max_seconds`, and keeps each WAV in `work/dub-cache/` keyed by
+  language, voice, text and that budget, so a rerun only speaks changed lines. The
+  lines are then mixed in order into one PCM16 stream (only the overlapping part
+  is held in memory) and encoded by `ffmpeg` to `<name>.dub.<lang>.<stamp>.m4a`,
+  one clip from 0 on the dub track, replacing the previous dub clip and file. One
+  file rather than a clip per line because export opens every audio clip as an
+  `ffmpeg` input. The clip's `speech` holds the spans with voice (ms in the file);
+  `duckSpans` maps them to the timeline and the dub track's `duck` (default
+  `DUCK_GAIN` 0.15) lowers every other audio track there, in playback
+  (`duckLevel` in `useProgram`) and in export (`RenderJob.duck`: the non-dub mix
+  goes through `asendcmd` + `volume@duck`, 150 ms down ramp, 300 ms up ramp).
 - **Speakers.** `speakers` (`src/lib/speakers.ts`) holds name, colour, gender
   and KorvaTTS voice; a caption points at one through `Segment.speaker` =
   `Speaker.id`. Older projects may hold free text there; the Caption tab keeps it
@@ -287,11 +301,11 @@ similarity, not exact equality.
 ## Planned stages that do not exist yet
 
 The Export tab lists five steps — extraction, translation, analysis, dubbing and
-video export. Extraction (hard-subtitle OCR, audio extraction for STT) and the
-"Xuất video" button (timeline export, see above) exist; "Chạy pipeline" and the
-pipeline's run button only write a log line. Speech recognition and its
-live translation call the Glotalk server (see below); TTS and server-side dubbing
-are not called. Resolution and
+video export. Extraction (hard-subtitle OCR, audio extraction for STT), dubbing
+(the "Lồng tiếng" tab, see above) and the "Xuất video" button (timeline export)
+exist; "Chạy pipeline" and the pipeline's run button only write a log line. Speech
+recognition, translation and dubbing speech call the Glotalk server (see below);
+the server's own dub jobs (video links) are not used. Resolution and
 encoder apply to "Xuất video"; the checkpoint option is UI only.
 
 ## Glotalk server

@@ -1,10 +1,10 @@
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import { api, DEFAULT_SERVER, formatTime, MediaInfo, OcrModel, OcrPartial, OcrProgress, OcrSegment, settingsStore, SpeakersProgress, SttProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
+import { api, DEFAULT_SERVER, DubLine, DubProgress, formatTime, MediaInfo, OcrModel, OcrPartial, OcrProgress, OcrSegment, settingsStore, SpeakersProgress, SttProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
 import { Speaker, speakersFromLabels } from "../lib/speakers";
 import { PronounRule, withPronouns } from "../lib/pronouns";
 import { parseSrt, Segment, toSrt } from "../lib/srt";
-import { captionText, Clip, clipFx, Track, trackAudible, withCaptionTracks } from "../lib/timeline";
+import { captionText, Clip, clipFx, duckSpans, Track, trackAudible, withCaptionTracks } from "../lib/timeline";
 import { drawCaption, drawText } from "../lib/graphics";
 import { SubStyle } from "../lib/subStyle";
 import { ColorGrade, gradeForExport } from "../lib/colorGrade";
@@ -487,6 +487,72 @@ export function cancelTranslate() {
   wakeTranslate?.();
 }
 
+/**
+ * Lồng tiếng: đọc bản dịch từng câu bằng giọng của nhân vật (câu chưa gán nhân vật dùng `voice`) qua
+ * `POST /speak` của server, ghép thành một file đặt từ 0 trên track lồng tiếng, thay clip lồng tiếng cũ.
+ * Câu đã đọc được lưu ở `work/dub-cache`, nên chạy lại chỉ đọc các câu đã sửa.
+ */
+export async function runDub(opts: { language: string; voice: string }) {
+  const s = S();
+  const { video } = s;
+  if (!video) return s.log(t("act.noVideo"));
+  if (s.dub.running) return;
+  const session = useSession.getState().session;
+  if (!session || session.guest || !session.token) return s.log(t("dub.guest"));
+  const voiceOf = new Map(s.speakers.map((x) => [x.id, x.voice]));
+  const lines: DubLine[] = s.segments
+    .filter((x) => x.vi.trim() && x.end > x.start)
+    .map((x) => ({ id: x.id, startMs: x.start, endMs: x.end, text: x.vi.trim(), voice: (x.speaker && voiceOf.get(x.speaker)) || opts.voice }));
+  if (!lines.length) return s.log(t("dub.nothing"));
+  const track = s.tracks.find((x) => x.dub);
+  if (track?.locked) return s.log(t("act.trackLocked"));
+
+  const server = settingsStore.get("serverUrl", DEFAULT_SERVER);
+  const dir = s.workDir || s.outDir || dirOf(video.path);
+  const old = s.clips.filter((c) => c.speech && s.tracks.find((x) => x.id === c.trackId)?.dub);
+  const oldAssets = s.assets.filter((a) => old.some((c) => c.assetId === a.id));
+  const output = `${dir}/${baseName(video.path)}.dub.${opts.language}.${Date.now()}.m4a`;
+  const totalMs = Math.max(timelineEnd(s), lines[lines.length - 1].endMs);
+  s.set({ dub: { running: true, phase: "speak", done: 0, total: lines.length } });
+  s.log(t("dub.start", { n: lines.length, server }));
+  const unlisten = await listen<DubProgress>("dub-progress", (e) => S().set({ dub: { running: true, ...e.payload } }));
+  const started = performance.now();
+  try {
+    const out = await api.dubSpeak({
+      server, token: session.token, language: opts.language, lines, totalMs, cacheDir: `${dir}/dub-cache`, output, replace: oldAssets.map((a) => a.path),
+    });
+    if (S().video?.path !== video.path) return;
+    for (const a of oldAssets) S().removeAsset(a.id);
+    let dubTrack = S().tracks.find((x) => x.dub)?.id;
+    if (!dubTrack) {
+      dubTrack = S().addTrack("audio");
+      S().setTrack(dubTrack, { dub: true });
+    }
+    const asset = S().addAsset(await api.probeMedia(out.output));
+    const clip = S().placeAsset(asset.id, 0, dubTrack);
+    const placed = S().clips.find((c) => c.id === clip);
+    if (placed) S().patchClips({ [placed.id]: { speech: out.spans } });
+    else S().log(t("act.trackLocked"));
+    // Track lồng tiếng đã có clip khác chồng lên: clip mới sang track thường, không hạ âm gốc.
+    if (placed && placed.trackId !== dubTrack) S().log(t("dub.trackBusy"));
+    loadAssetData(asset.id);
+    S().log(t("dub.done", { n: out.spoken, cached: out.cached, failed: out.failed.length, overrun: out.overrun.length, secs: ((performance.now() - started) / 1000).toFixed(1) }));
+    if (out.failed.length) S().log(t("dub.lineFailed", { id: out.failed[0].id, err: out.failed[0].error }));
+    if (out.overrun.length) S().log(t("dub.overrunHint", { ids: out.overrun.slice(0, 10).join(", ") }));
+    await autosaveProject();
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    S().log(t("dub.stopped", { err: m.startsWith("dub.") ? t(m as TKey) : m }));
+  } finally {
+    unlisten();
+    S().set({ dub: { ...S().dub, running: false, phase: "idle" } });
+  }
+}
+
+export function cancelDub() {
+  api.dubCancel().catch(() => {});
+}
+
 /** Vùng mặc định khi người dùng chưa khoanh: dải dưới của khung hình, nơi phụ đề thường nằm. */
 export const DEFAULT_SUB_REGION = { x: 0.05, y: 0.74, w: 0.9, h: 0.22 };
 
@@ -629,7 +695,7 @@ export async function exportVideo(opts: { res: ExportRes; encoder: string }) {
     const a = c.assetId ? assets.get(c.assetId) : undefined;
     if (!tk || tk.kind !== "audio" || !a || !trackAudible(s.tracks, tk)) continue;
     const volume = tk.gain * clipFx(c).volume;
-    if (volume > 0) audio.push({ path: a.path, startMs: c.start, durMs: c.dur, inMs: c.in, volume, volumeL: tk.gainL ?? 1, volumeR: tk.gainR ?? 1 });
+    if (volume > 0) audio.push({ path: a.path, startMs: c.start, durMs: c.dur, inMs: c.in, volume, volumeL: tk.gainL ?? 1, volumeR: tk.gainR ?? 1, dub: !!tk.dub });
   }
 
   let unlisten: (() => void) | undefined;
@@ -639,7 +705,7 @@ export async function exportVideo(opts: { res: ExportRes; encoder: string }) {
     S().log(t("act.renderStart", { w: W, h: H, enc: opts.encoder, file: output }));
     unlisten = await listen<RenderProgress>("render-progress", (e) => S().set({ render: { running: true, ...e.payload } }));
     const t0 = performance.now();
-    await api.renderVideo({ output, width: W, height: H, fps, durationMs, encoder: opts.encoder, layers, audio, graphics, grade: gradeForExport(s.grade) });
+    await api.renderVideo({ output, width: W, height: H, fps, durationMs, encoder: opts.encoder, layers, audio, graphics, grade: gradeForExport(s.grade), duck: duckSpans(s.tracks, s.clips) });
     S().log(t("act.renderDone", { file: output, secs: ((performance.now() - t0) / 1000).toFixed(1) }));
   } catch (e) {
     S().log(t("act.renderError", { err: String(e) }));
