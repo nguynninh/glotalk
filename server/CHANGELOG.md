@@ -11,6 +11,11 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 
 ### Added
 
+- Dubbing speech for the editor on the HTTP port: `POST /speak` with an editor sign-in
+  token and `{"language","text","voice","max_seconds"?}` returns one line as
+  `audio/wav`, with its length in `X-Speech-Seconds`. The voice is named (one of the
+  ten speaker voices) and `max_seconds` speeds speech up, at most 2x, to fit. The
+  public tunnel must also send `^/speak` to `127.0.0.1:8767`.
 - Subtitle translation for the editor on the HTTP port: `POST /translate` with
   `Authorization: Bearer` (an editor sign-in token) and
   `{"source","target","texts":[..],"context":[..]}` -> `{"translations":[{"text"} |

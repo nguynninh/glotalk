@@ -119,7 +119,7 @@ translation router. They run one at a time; `ONPLAY_JOB_DIR` (default `jobs/`),
 `ONPLAY_DUB_MAX_SECONDS` (default 900) and `ONPLAY_JOB_MAX_GB` (default 20) set where
 files go, the longest video and the disk limit. Files are deleted 24 h after a job
 ends and at every start. For the public service the tunnel must also send
-`stt.qiverse.top` paths matching `^/(jobs|auth|translate)` to `http://127.0.0.1:8767`,
+`stt.qiverse.top` paths matching `^/(jobs|auth|translate|speak)` to `http://127.0.0.1:8767`,
 before its catch-all rule for 8766.
 
 The same port translates subtitle lines for a signed-in editor: `POST /translate` with
@@ -127,6 +127,16 @@ The same port translates subtitle lines for a signed-in editor: `POST /translate
 "context":[..]}` returns `{"translations":[{"text":".."} | {"error":".."}]}` in order.
 At most 50 lines per request; each goes to the router in `context` mode with the five
 previous lines (`context` first), so send long subtitles in order, a batch at a time.
+
+It also speaks dubbing lines for a signed-in editor: `POST /speak` with
+`{"language":"vi","text":"..","voice":"huu_dat","max_seconds":2.4}` returns
+`audio/wav` (mono PCM16 at KorvaTTS's sample rate) with the spoken length in
+`X-Speech-Seconds`. `voice` is one of the ten per-speaker voices
+(`onplay-server/src/speech/voices.rs`); `language` is `vi` or `en`; `max_seconds` is
+optional and raises the speed, at most 2x, so the predicted speech fits, which it may
+still not. One line per request, synthesized with the same single KorvaTTS instance as
+live sessions, so requests take turns. Errors: `401 invalid_token`, `400 bad_request`,
+`400 invalid_speech` (with `text`), `503 speech_unavailable`.
 
 ## Live translation
 

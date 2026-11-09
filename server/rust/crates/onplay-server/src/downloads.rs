@@ -5,7 +5,8 @@
 //!
 //! The same port answers editor sign-in under `/auth/` ([`crate::auth`]) and, for a signed-in
 //! editor, `POST /translate` ([`crate::translation::translate_batch`]): subtitle lines through
-//! the translation router, at most 50 per request.
+//! the translation router, at most 50 per request; and `POST /speak`: one dubbing line spoken
+//! with a named KorvaTTS voice ([`crate::speech::Speech::speak_as`]), returned as WAV.
 //!
 //! Files never change once a job is done, so every response carries a strong `ETag`,
 //! `Last-Modified` and a private `Cache-Control` up to the job's expiry, and single byte
@@ -22,25 +23,29 @@ use tiny_http::{Header, Method, Request, Response, StatusCode};
 use crate::auth::{Auth, LoginError};
 use crate::jobs::tokens::bearer;
 use crate::jobs::{Jobs, NotServed, Served};
+use crate::speech::{Speech, SpeechError};
 use crate::time::{http_date, seconds_until};
 use crate::translation::{translate_batch, Translator};
 
 /// Answers requests until the listener fails, one thread per request so a slow download
 /// does not hold up the others.
-pub fn serve(jobs: &Arc<Jobs>, auth: &Arc<Auth>, translator: &Arc<Translator>, server: tiny_http::Server) {
+pub fn serve(jobs: &Arc<Jobs>, auth: &Arc<Auth>, translator: &Arc<Translator>, speech: &Arc<Speech>, server: tiny_http::Server) {
     for request in server.incoming_requests() {
-        let (jobs, auth, translator) = (jobs.clone(), auth.clone(), translator.clone());
-        std::thread::spawn(move || respond(&jobs, &auth, &translator, request));
+        let (jobs, auth, translator, speech) = (jobs.clone(), auth.clone(), translator.clone(), speech.clone());
+        std::thread::spawn(move || respond(&jobs, &auth, &translator, &speech, request));
     }
 }
 
-fn respond(jobs: &Jobs, auth: &Auth, translator: &Translator, request: Request) {
+fn respond(jobs: &Jobs, auth: &Auth, translator: &Translator, speech: &Speech, request: Request) {
     let header = |name: &'static str| request.headers().iter().find(|header| header.field.equiv(name)).map(|header| header.value.as_str().to_owned());
     if request.url().starts_with("/auth/") {
         return respond_auth(auth, request);
     }
     if request.url().split(['?', '#']).next() == Some("/translate") {
         return respond_translate(auth, translator, request);
+    }
+    if request.url().split(['?', '#']).next() == Some("/speak") {
+        return respond_speak(auth, speech, request);
     }
     if !matches!(request.method(), Method::Get | Method::Head) {
         let _ = request.respond(error(405, "method_not_allowed"));
@@ -137,6 +142,59 @@ fn respond_translate(auth: &Auth, translator: &Translator, mut request: Request)
         }
     };
     let _ = request.respond(response);
+}
+
+/// Longest speech request body read: one line of at most 3000 characters with its options.
+const SPEAK_BODY_LIMIT: u64 = 16 * 1024;
+
+/// `{"language","text","voice","max_seconds"?}` -> `audio/wav` with the spoken length in
+/// `X-Speech-Seconds`. Lines are spoken one at a time, shared with live sessions' speech.
+fn respond_speak(auth: &Auth, speech: &Speech, mut request: Request) {
+    let signed_in = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("Authorization"))
+        .and_then(|header| bearer(header.value.as_str()))
+        .is_some_and(|token| auth.user(token).is_some());
+    if *request.method() != Method::Post {
+        let _ = request.respond(error(405, "method_not_allowed"));
+        return;
+    }
+    if !signed_in {
+        let _ = request.respond(error(401, "invalid_token"));
+        return;
+    }
+    let mut body = Vec::new();
+    let read = request.as_reader().take(SPEAK_BODY_LIMIT + 1).read_to_end(&mut body);
+    let fields = read.ok().filter(|_| body.len() as u64 <= SPEAK_BODY_LIMIT).and_then(|_| serde_json::from_slice::<serde_json::Value>(&body).ok());
+    let Some(fields) = fields else {
+        let _ = request.respond(error(400, "bad_request"));
+        return;
+    };
+    let field = |name: &str| fields.get(name).and_then(serde_json::Value::as_str).unwrap_or_default();
+    let max_seconds = match fields.get("max_seconds") {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => match value.as_f64() {
+            Some(max) => Some(max),
+            None => {
+                let _ = request.respond(error(400, "bad_request"));
+                return;
+            }
+        },
+    };
+    let _ = match speech.speak_as(field("text"), field("language"), field("voice"), max_seconds) {
+        Ok(spoken) => {
+            let length = spoken.wav.len();
+            let headers = vec![
+                header("Content-Type", "audio/wav"),
+                header("Cache-Control", "no-store"),
+                header("X-Speech-Seconds", &format!("{:.3}", spoken.seconds)),
+            ];
+            request.respond(Response::new(StatusCode(200), headers, std::io::Cursor::new(spoken.wav), Some(length), None))
+        }
+        Err(SpeechError::Invalid(text)) => request.respond(json(400, &serde_json::json!({ "code": "invalid_speech", "text": text }).to_string())),
+        Err(SpeechError::Unavailable(text)) => request.respond(json(503, &serde_json::json!({ "code": "speech_unavailable", "text": text }).to_string())),
+    };
 }
 
 type Body = Response<Box<dyn Read + Send>>;
@@ -324,6 +382,39 @@ mod tests {
         assert_eq!(code, 200);
         assert!(body.contains(r#""error""#), "{body}");
         assert_eq!(status_of(ureq::get(&format!("{base}/translate")).call()), 405);
+        std::fs::remove_file(users).unwrap();
+    }
+
+    #[test]
+    fn speak_needs_sign_in_and_valid_lines() {
+        let users = std::env::temp_dir().join(format!("onplay-speak-http-{}", std::process::id()));
+        std::fs::write(&users, format!("vtvlive {}\n", crate::auth::hash_password("12345678"))).unwrap();
+        let auth = Arc::new(Auth::new(&users));
+        let (token, _) = auth.login("vtvlive", "12345678").unwrap();
+        let speech = Arc::new(Speech::new());
+        let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", server.server_addr().to_ip().unwrap());
+        std::thread::spawn(move || {
+            for request in server.incoming_requests() {
+                respond_speak(&auth, &speech, request);
+            }
+        });
+        let post = |token: &str, body: &str| match ureq::post(&format!("{base}/speak"))
+            .set("Authorization", &format!("Bearer {token}"))
+            .set("Content-Type", "application/json")
+            .send_string(body)
+        {
+            Ok(response) => (response.status(), response.into_string().unwrap_or_default()),
+            Err(ureq::Error::Status(code, response)) => (code, response.into_string().unwrap()),
+            Err(error) => panic!("{error}"),
+        };
+        assert_eq!(post("wrong", r#"{"language":"vi","text":"Xin chào","voice":"huu_dat"}"#).0, 401);
+        assert_eq!(post(&token, "not json").0, 400);
+        assert_eq!(post(&token, r#"{"language":"vi","text":"Xin chào","voice":"huu_dat","max_seconds":"2"}"#).0, 400);
+        let (code, body) = post(&token, r#"{"language":"vi","text":"Xin chào","voice":"nobody"}"#);
+        assert_eq!(code, 400);
+        assert!(body.contains("invalid_speech"), "{body}");
+        assert_eq!(status_of(ureq::get(&format!("{base}/speak")).call()), 405);
         std::fs::remove_file(users).unwrap();
     }
 

@@ -16,6 +16,11 @@ pub fn speakable(language: &str) -> bool {
     LANGUAGE_VOICES.iter().any(|(code, _)| *code == language)
 }
 
+/// The named KorvaTTS voice, for clients that pick one per speaker (the editor).
+pub fn named(name: &str) -> Option<&'static str> {
+    SPEAKER_VOICES.iter().copied().find(|voice| *voice == name)
+}
+
 /// Voice for a 1-based speaker label; 0 means not yet identified and keeps the language
 /// default.
 pub fn voice_for(language: &str, speaker: u32) -> Option<&'static str> {
@@ -36,5 +41,7 @@ mod tests {
         assert_eq!(voice_for("vi", 11), Some("khanh_vy"));
         assert_eq!(voice_for("fr", 0), None);
         assert!(speakable("en") && !speakable("fr"));
+        assert_eq!(named("huu_dat"), Some("huu_dat"));
+        assert_eq!(named("../x"), None);
     }
 }

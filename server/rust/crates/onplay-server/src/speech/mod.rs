@@ -16,6 +16,8 @@ use crate::languages::is_target;
 
 const MAX_TEXT_CHARS: usize = 3000;
 const MAX_WAV_BYTES: usize = 32 * 1024 * 1024;
+/// KorvaTTS's default speed, kept for dubbing when the line already fits.
+const SPEED: f32 = 1.05;
 
 /// Messages are sent to clients in `audio_error` events.
 #[derive(Debug, thiserror::Error)]
@@ -77,7 +79,26 @@ impl Speech {
             return Err(SpeechError::Invalid("Speed must be between 1 and 2"));
         }
         let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.speak(text, language, voice, speed as f32).ok_or(SpeechError::Unavailable("KorvaTTS speech synthesis unavailable"))?
+        state.speak(text, language, voice, speed as f32, None).ok_or(SpeechError::Unavailable("KorvaTTS speech synthesis unavailable"))?
+    }
+
+    /// Speaks `text` with the named voice ([`voices::named`]), speeding up (at most 2x) so the
+    /// predicted speech fits `max_seconds` when given; the result may still be longer.
+    pub fn speak_as(&self, text: &str, language: &str, voice: &str, max_seconds: Option<f64>) -> Result<Spoken, SpeechError> {
+        if text.trim().is_empty() || text.chars().count() > MAX_TEXT_CHARS || text.contains('\0') {
+            return Err(SpeechError::Invalid("Expected non-empty text, maximum 3000 characters"));
+        }
+        if !voices::speakable(language) {
+            return Err(SpeechError::Invalid("Unsupported speech language"));
+        }
+        let Some(voice) = voices::named(voice) else {
+            return Err(SpeechError::Invalid("Unknown voice"));
+        };
+        if max_seconds.is_some_and(|max| !(max > 0.0 && max <= 600.0)) {
+            return Err(SpeechError::Invalid("max_seconds must be between 0 and 600"));
+        }
+        let mut state = self.state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.speak(text, language, voice, SPEED, max_seconds.map(|max| max as f32)).ok_or(SpeechError::Unavailable("KorvaTTS speech synthesis unavailable"))?
     }
 }
 
@@ -92,7 +113,7 @@ impl State {
     }
 
     /// `None` when the engine cannot load or synthesize.
-    fn speak(&mut self, text: &str, language: &str, voice: &'static str, speed: f32) -> Option<Result<Spoken, SpeechError>> {
+    fn speak(&mut self, text: &str, language: &str, voice: &'static str, speed: f32, max_duration: Option<f32>) -> Option<Result<Spoken, SpeechError>> {
         self.load().ok()?;
         let synthesizer = self.synthesizer.as_mut()?;
         if !self.voices.contains_key(voice) {
@@ -100,7 +121,7 @@ impl State {
             self.voices.insert(voice, VoiceStyle::load(&assets.voice(voice).ok()?).ok()?);
         }
         let options =
-            SynthesisOptions { total_steps: voices::TOTAL_STEPS, speed, cap_runaway_duration: true, ..SynthesisOptions::default() };
+            SynthesisOptions { total_steps: voices::TOTAL_STEPS, speed, max_duration, cap_runaway_duration: true, ..SynthesisOptions::default() };
         let language = Language::parse(language).ok()?;
         let samples = synthesizer.synthesize(text, language, &self.voices[voice], options, &mut self.noise).ok()?;
         let rate = synthesizer.sample_rate();
@@ -125,5 +146,23 @@ mod tests {
         assert_eq!(error("hi", "xx", 1.05), "Unsupported speech language");
         assert_eq!(error("hi", "fr", 1.05), "KorvaTTS currently supports Vietnamese and English speech only");
         assert_eq!(error("hi", "vi", 2.5), "Speed must be between 1 and 2");
+        let named = |text: &str, language: &str, voice: &str, max: Option<f64>| speech.speak_as(text, language, voice, max).err().unwrap().to_string();
+        assert_eq!(named(" ", "vi", "huu_dat", None), "Expected non-empty text, maximum 3000 characters");
+        assert_eq!(named("hi", "fr", "huu_dat", None), "Unsupported speech language");
+        assert_eq!(named("hi", "vi", "nobody", None), "Unknown voice");
+        assert_eq!(named("hi", "vi", "huu_dat", Some(0.0)), "max_seconds must be between 0 and 600");
+    }
+
+    /// Real KorvaTTS: `ORT_DYLIB_PATH=$PWD/build/lib/libonnxruntime.dylib cargo test -p onplay-server --lib speaks_named_voice_within_budget`.
+    #[test]
+    fn speaks_named_voice_within_budget() {
+        let Some(dylib) = std::env::var_os("ORT_DYLIB_PATH") else { return };
+        onplay_tts::init_runtime(std::path::Path::new(&dylib)).unwrap();
+        let speech = Speech::new();
+        let text = "Anh đã nói với em rồi, chuyện này không thể để người khác biết được.";
+        let free = speech.speak_as(text, "vi", "huu_dat", None).unwrap();
+        let fitted = speech.speak_as(text, "vi", "huu_dat", Some(free.seconds * 0.7)).unwrap();
+        assert!(fitted.seconds < free.seconds * 0.8, "{} vs {}", fitted.seconds, free.seconds);
+        assert_eq!(&fitted.wav[..4], b"RIFF");
     }
 }

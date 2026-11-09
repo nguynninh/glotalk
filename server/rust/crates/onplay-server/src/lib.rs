@@ -12,7 +12,7 @@
 //! A connection whose first message has a `type` is a dub job connection instead
 //! ([`jobs`], `docs/video-dubbing-design.md`); job results are served over HTTP by
 //! [`downloads`] on `127.0.0.1:8767`, which also answers editor sign-in ([`auth`]) and
-//! subtitle translation (`POST /translate`).
+//! subtitle translation (`POST /translate`) and dubbing speech (`POST /speak`).
 
 pub mod auth;
 pub mod config;
@@ -96,12 +96,12 @@ pub fn bind(config: &Config) -> std::io::Result<TcpListener> {
 }
 
 /// Accepts connections on `listener` (from [`bind`]) until it fails. With `downloads` (from
-/// [`bind_downloads`]), also serves job results (when dubbing is on), sign-in and subtitle
-/// translation there.
+/// [`bind_downloads`]), also serves job results (when dubbing is on), sign-in, subtitle
+/// translation and dubbing speech there.
 pub fn serve(services: Services, listener: TcpListener, downloads: Option<tiny_http::Server>) -> std::io::Result<()> {
     if let Some(server) = downloads {
-        let (jobs, auth, translator) = (services.jobs.clone(), services.auth.clone(), services.translator.clone());
-        std::thread::spawn(move || downloads::serve(&jobs, &auth, &translator, server));
+        let (jobs, auth, translator, speech) = (services.jobs.clone(), services.auth.clone(), services.translator.clone(), services.speech.clone());
+        std::thread::spawn(move || downloads::serve(&jobs, &auth, &translator, &speech, server));
     }
     socket::serve(Arc::new(services), listener)
 }
