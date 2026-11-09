@@ -241,6 +241,9 @@ function useShortcuts(active: boolean) {
       else if (key === "home") s.seek(0);
       else if (key === "end") s.seek(timelineEnd(s));
       else if (key === "n") s.addSegmentAt(s.time);
+      // 1–9: gán nhân vật thứ n cho câu đang chọn; 0: bỏ gán.
+      else if (/^[0-9]$/.test(key) && s.selectedId !== null && !sel && (key === "0" || s.speakers[Number(key) - 1]))
+        s.updateSegment(s.selectedId, { speaker: key === "0" ? undefined : s.speakers[Number(key) - 1].id });
       else if (key === "s") sel ? s.splitClip(sel.id, s.time) : s.splitAt(s.time);
       else if ((key === "delete" || key === "backspace") && (sel || s.selectedId)) sel ? s.removeClip(sel.id) : s.removeSegment(s.selectedId!);
       else if (key === "escape") s.set({ selectingRegion: null, pickingKeyFor: null, selectedId: null, selectedClipId: null });

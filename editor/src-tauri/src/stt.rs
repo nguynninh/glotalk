@@ -32,6 +32,9 @@ pub struct SttJob {
     pub source_language: String,
     /// Rỗng: chỉ nhận dạng, không dịch.
     pub target_language: String,
+    /// Bật `speakers: true` của server: nhãn người nói từ phân đoạn cuối phiên.
+    #[serde(default)]
+    pub speakers: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -40,6 +43,8 @@ pub struct SttSegment {
     pub end: u64,
     pub text: String,
     pub translation: String,
+    /// Nhãn người nói 1-based của server; 0 hoặc thiếu là chưa xác định.
+    pub speaker: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -137,7 +142,7 @@ pub async fn check(server: &str) -> AppResult<String> {
 }
 
 /// Giải mã âm thanh của file thành PCM16 mono 16 kHz trong bộ nhớ (1 giờ ≈ 115 MB).
-fn decode_pcm(path: &str) -> AppResult<Vec<u8>> {
+pub(crate) fn decode_pcm(path: &str) -> AppResult<Vec<u8>> {
     let out = std::process::Command::new(find_tool("ffmpeg")?)
         .args(["-hide_banner", "-loglevel", "error", "-i", path, "-vn", "-ac", "1", "-ar", "16000", "-f", "s16le", "-"])
         .output()?;
@@ -203,6 +208,8 @@ struct Line {
     text: String,
     translation: String,
     revision: u8,
+    /// Nhãn trực tiếp; nhãn phân đoạn cuối phiên được ưu tiên.
+    speaker: u32,
 }
 
 fn revision_rank(r: &str) -> u8 {
@@ -229,11 +236,14 @@ pub async fn transcribe(job: SttJob, cancel: Arc<AtomicBool>, progress: impl Fn(
     progress(SttProgress { phase: "connect", done_s: 0.0, total_s, last_text: String::new() });
     let mut socket = connect(&job.server).await?;
     let translating = !job.target_language.is_empty();
-    let config = if translating {
+    let mut config = if translating {
         json!({"source_language": job.source_language, "target_language": job.target_language})
     } else {
         json!({"source_language": job.source_language})
     };
+    if job.speakers {
+        config["speakers"] = true.into();
+    }
     start(&mut socket, config, |s| progress(SttProgress { phase: "connect", done_s: 0.0, total_s, last_text: s.to_owned() })).await?;
     let (mut sink, mut stream) = socket.split();
 
@@ -260,6 +270,8 @@ pub async fn transcribe(job: SttJob, cancel: Arc<AtomicBool>, progress: impl Fn(
     let mut lines: HashMap<u64, Line> = HashMap::new();
     let mut position = 0.0f64;
     let mut warnings = Vec::new();
+    // Lượt nói từ sự kiện `speakers` (giây): phân đoạn lại cả bản ghi sau `end`.
+    let mut turns: Vec<(f64, f64, u32)> = Vec::new();
     let mut finished = false;
     while let Some(msg) = stream.next().await {
         if cancel.load(Ordering::Relaxed) {
@@ -281,10 +293,21 @@ pub async fn transcribe(job: SttJob, cancel: Arc<AtomicBool>, progress: impl Fn(
                 line.first_seen.get_or_insert(position);
                 line.final_at = Some(position);
                 line.text = event["text"].as_str().unwrap_or_default().to_owned();
+                line.speaker = event["speaker"].as_u64().unwrap_or(0) as u32;
                 if translating {
                     pending.fetch_add(1, Ordering::Relaxed);
                 }
                 progress(SttProgress { phase: "stt", done_s: position, total_s, last_text: line.text.clone() });
+            }
+            // Bản dịch lại các đoạn phân theo người nói đánh id riêng, trùng id câu trực tiếp.
+            ("translation", _) if event["revision"].as_str() == Some("refined") => {}
+            ("speakers", _) => {
+                turns = event["segments"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|t| Some((t["start"].as_f64()?, t["end"].as_f64()?, t["speaker"].as_u64()? as u32)))
+                    .collect();
             }
             ("translation", Some(id)) => {
                 let rank = revision_rank(event["revision"].as_str().unwrap_or_default());
@@ -326,9 +349,23 @@ pub async fn transcribe(job: SttJob, cancel: Arc<AtomicBool>, progress: impl Fn(
     let segments = finals
         .into_iter()
         .zip(spans)
-        .map(|((_, l), (start, end))| SttSegment { start, end, text: l.text, translation: l.translation })
+        .map(|((_, l), (start, end))| {
+            let speaker = speaker_at(&turns, start, end).unwrap_or(l.speaker);
+            SttSegment { start, end, text: l.text, translation: l.translation, speaker }
+        })
         .collect();
     Ok(SttOutput { segments, audio_seconds: total_s, seconds: started.elapsed().as_secs_f64(), warnings })
+}
+
+/// Nhãn của lượt nói trùng câu `[start, end)` (ms) lâu nhất; None khi không trùng lượt nào.
+fn speaker_at(turns: &[(f64, f64, u32)], start: u64, end: u64) -> Option<u32> {
+    let (start, end) = (start as f64 / 1000.0, end as f64 / 1000.0);
+    turns
+        .iter()
+        .map(|&(s, e, speaker)| (speaker, end.min(e) - start.max(s)))
+        .filter(|(_, overlap)| *overlap > 0.0)
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(speaker, _)| speaker)
 }
 
 #[cfg(test)]
@@ -352,6 +389,14 @@ mod tests {
         assert_eq!(spans, vec![(900, 2650)]);
     }
 
+    #[test]
+    fn speaker_at_takes_longest_overlap() {
+        let turns = [(0.0, 2.0, 1), (2.0, 5.0, 2)];
+        assert_eq!(speaker_at(&turns, 1500, 4000), Some(2));
+        assert_eq!(speaker_at(&turns, 0, 1200), Some(1));
+        assert_eq!(speaker_at(&turns, 6000, 7000), None);
+    }
+
     /// Kết nối server thật: `GLOTALK_STT=https://stt.qiverse.top cargo test --lib stt_live -- --nocapture`.
     #[test]
     fn stt_live_check() {
@@ -365,7 +410,7 @@ mod tests {
     #[test]
     fn stt_live_transcribe() {
         let (Ok(server), Ok(path)) = (std::env::var("GLOTALK_STT"), std::env::var("GLOTALK_STT_FILE")) else { return };
-        let job = SttJob { server, path, source_language: std::env::var("GLOTALK_STT_LANG").unwrap_or("auto".into()), target_language: "vi".into() };
+        let job = SttJob { server, path, source_language: std::env::var("GLOTALK_STT_LANG").unwrap_or("auto".into()), target_language: "vi".into(), speakers: std::env::var("GLOTALK_STT_SPEAKERS").is_ok() };
         let out = tauri::async_runtime::block_on(transcribe(job, Arc::default(), |_| {})).unwrap();
         println!("{out:#?}");
         assert!(!out.segments.is_empty());

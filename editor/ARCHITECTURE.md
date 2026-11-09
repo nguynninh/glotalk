@@ -39,6 +39,7 @@ React webview (src/)  ──invoke()──>  Rust core (src-tauri/src/)  ──s
 | `src-tauri/src/media/ffmpeg.rs` | Tool discovery, probing, audio extraction, waveform peaks, thumbnails, cache directories | Editor state |
 | `src-tauri/src/ocr/` | Hard-subtitle extraction: frame decode, change filter, PaddleOCR, merging into timed segments | Tauri types — it is a plain library module |
 | `src-tauri/src/stt.rs` | WebSocket client for the Glotalk server's speech recognition (`server/docs/streaming-audio.md`): PCM decode, session protocol, timing alignment | UI state |
+| `src-tauri/src/speakers/` | Speaker detection from caption spans: Kaldi-style fbank, CAM++ embeddings through ONNX Runtime (`ort`, the version `oar-ocr` already uses), average-linkage clustering, YIN pitch for a gender hint, model download | Tauri types |
 | `src-tauri/src/project.rs` | Shared data model (`Segment`, `Region`) intended for reuse by a Rust server | Tauri or UI concerns |
 | `src/lib/api.ts` | Typed wrappers around every `invoke()`, IPC types, timecode formatting, `localStorage` settings | React components |
 | `src/lib/srt.ts` | SRT parse/serialise and the frontend `Segment` type (the canonical caption shape) | Store access |
@@ -71,6 +72,7 @@ Registered in `lib.rs`, wrapped in `src/lib/api.ts`:
 | `overlay_begin` / `overlay_write` | Fresh temp folder for an export's text/caption PNGs; `overlay_write` takes raw bytes with the file name in the `x-name` header | Command thread (sync) |
 | `stt_check` | Opens a recognition-only session on the server, waits for `ready`, closes; returns the round trip | async (tokio) |
 | `stt_transcribe` / `stt_cancel` | Streams the file's audio to the server and returns timed transcript + translation; progress as `stt-progress` events | async (tokio); ffmpeg decode in `spawn_blocking` |
+| `speakers_detect` / `speakers_cancel` | Decodes the main video's audio, embeds each caption span and clusters them; returns a label per caption plus per-speaker line count, seconds, median pitch and gender hint; progress as `speakers-progress` events. The CAM++ model is downloaded into the OCR model folder on first use and kept loaded (`SpeakersState`) | `spawn_blocking` |
 | `render_video` / `render_cancel` | Export the timeline with one ffmpeg run (`media/render.rs`); progress as `render-progress` events | `spawn_blocking` |
 
 Tauri maps camelCase JavaScript argument names (`perSecond`, `durationMs`) to the
@@ -108,6 +110,16 @@ Language (`useLang`) and theme (`useTheme`) are separate small stores.
   move, split and delete together. Tracks can be hidden, locked, muted or soloed
   and have a gain. One audio track is marked `dub`, the target of the future TTS
   step. Times are integer milliseconds; `in` is the offset into the source file.
+- **Speakers.** `speakers` (`src/lib/speakers.ts`) holds name, colour, gender
+  and KorvaTTS voice; a caption points at one through `Segment.speaker` =
+  `Speaker.id`. Older projects may hold free text there; the Caption tab keeps it
+  as an extra option. Labels come from `speakers_detect` (any caption source) or
+  from the server's `speakers: true` turns during speech recognition.
+- **Pronouns.** `pronouns` (`src/lib/pronouns.ts`) are rules from one speaker to
+  another (or to anyone) with the words replacing "tôi" and "bạn". `runTranslate`
+  applies them to Vietnamese results; `applyPronounsToAll` re-applies them. The
+  listener is `Segment.listener` if set, otherwise guessed from neighbouring
+  lines. `listener` exists only in the frontend `Segment`, not in `project.rs`.
 - **Regions.** `regions.dialog` and `regions.ocr` are rectangles in 0..1 of the
   frame, drawn on the monitor. With `linkOcr` on, OCR scans the dialog region.
   `Region` matches `project::Region` in Rust.

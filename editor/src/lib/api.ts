@@ -138,12 +138,16 @@ export interface SttJob {
   sourceLanguage: string;
   /** Rỗng: không dịch */
   targetLanguage: string;
+  /** Xin server phân đoạn theo người nói sau khi nhận dạng xong. */
+  speakers?: boolean;
 }
 export interface SttSegment {
   start: number;
   end: number;
   text: string;
   translation: string;
+  /** Nhãn 1-based của server, 0 là chưa xác định. */
+  speaker: number;
 }
 export interface SttOutput {
   segments: SttSegment[];
@@ -156,6 +160,30 @@ export interface SttProgress {
   doneS: number;
   totalS: number;
   lastText: string;
+}
+
+/** Khớp `commands::SpeakersJob` (snake_case không đổi vì các trường là một từ) và `speakers::Outcome` (camelCase). */
+export interface SpeakersJob {
+  path: string;
+  spans: { start: number; end: number }[];
+  options: { threshold: number; speakers: number };
+}
+export interface SpeakerInfo {
+  label: number;
+  lines: number;
+  seconds: number;
+  pitchHz: number | null;
+  gender: "male" | "female" | null;
+}
+export interface SpeakersOutcome {
+  /** Nhãn từng câu theo thứ tự `spans`; 0 là không xác định. */
+  labels: number[];
+  speakers: SpeakerInfo[];
+}
+export interface SpeakersProgress {
+  phase: "download" | "model" | "audio" | "embed";
+  done: number;
+  total: number;
 }
 
 /** Server công khai (onplay-server); đổi trong Cài đặt. */
@@ -182,6 +210,8 @@ export const api = {
   sttCheck: (server: string) => invoke<string>("stt_check", { server }),
   sttTranscribe: (job: SttJob) => invoke<SttOutput>("stt_transcribe", { job }),
   sttCancel: () => invoke<void>("stt_cancel"),
+  speakersDetect: (job: SpeakersJob) => invoke<SpeakersOutcome>("speakers_detect", { job }),
+  speakersCancel: () => invoke<void>("speakers_cancel"),
   readText: (path: string) => invoke<string>("read_text", { path }),
   writeText: (path: string, content: string) => invoke<void>("write_text", { path, content }),
   /** Tạo thư mục dự án (kèm `work/`, `export/`), trả về đường dẫn file `.glotalk` bên trong. */

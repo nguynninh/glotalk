@@ -99,6 +99,7 @@ type Menu = { x: number; y: number } & ({ clip: string } | { track: string });
 export function TimelinePanel() {
   const video = useEditor((s) => s.video);
   const segments = useEditor((s) => s.segments);
+  const speakers = useEditor((s) => s.speakers);
   const selectedId = useEditor((s) => s.selectedId);
   const selectedClipId = useEditor((s) => s.selectedClipId);
   const pxPerSec = useEditor((s) => s.pxPerSec);
@@ -527,18 +528,21 @@ export function TimelinePanel() {
                   scrub(e);
                 }}>
                 {tk.kind === "caption"
-                  ? visibleSegs.map((s) => (
-                      <div key={s.id} className={`clip cap-clip ${s.id === selectedId ? "selected" : ""}`}
-                        style={{ left: msToX(s.start), width: Math.max(2, msToX(s.end - s.start)) }}
+                  ? visibleSegs.map((s) => {
+                    const sp = s.speaker ? speakers.find((x) => x.id === s.speaker) : undefined;
+                    return (
+                      <div key={s.id} className={`clip cap-clip ${s.id === selectedId ? "selected" : ""} ${sp ? "has-spk" : ""}`}
+                        style={{ left: msToX(s.start), width: Math.max(2, msToX(s.end - s.start)), ...(sp ? { borderLeftColor: sp.color } : {}) }}
                         onPointerDown={(e) => dragCaption(e, s, "move")}
                         onDoubleClick={() => { st.seek(s.start); st.set({ selectedId: s.id, inspectorTab: "caption" }); }}
-                        title={[s.src, s.vi].filter(Boolean).join("\n")}>
+                        title={[sp?.name, s.src, s.vi].filter(Boolean).join("\n")}>
                         <i className="trim l" onPointerDown={(e) => dragCaption(e, s, "start")} />
                         <span className={`cap-src ${tk.srcHidden ? "dim" : ""}`}>{s.src}</span>
                         <span className={`cap-vi ${tk.hidden ? "dim" : ""}`}>{s.vi}</span>
                         <i className="trim r" onPointerDown={(e) => dragCaption(e, s, "end")} />
                       </div>
-                    ))
+                    );
+                  })
                   : clips
                       .filter((c) => c.trackId === tk.id && clipEnd(c) >= visStart && c.start <= visEnd)
                       .map((c) => (

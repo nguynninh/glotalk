@@ -1,6 +1,8 @@
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import { api, DEFAULT_SERVER, formatTime, MediaInfo, OcrModel, OcrPartial, OcrProgress, OcrSegment, settingsStore, SttProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
+import { api, DEFAULT_SERVER, formatTime, MediaInfo, OcrModel, OcrPartial, OcrProgress, OcrSegment, settingsStore, SpeakersProgress, SttProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
+import { Speaker, speakersFromLabels } from "../lib/speakers";
+import { PronounRule, withPronouns } from "../lib/pronouns";
 import { parseSrt, Segment, toSrt } from "../lib/srt";
 import { captionText, Clip, clipFx, Track, trackAudible, withCaptionTracks } from "../lib/timeline";
 import { drawCaption, drawText } from "../lib/graphics";
@@ -69,6 +71,8 @@ interface ProjectFile {
   tracks: Track[];
   clips: Clip[];
   segments: Segment[];
+  speakers?: Speaker[];
+  pronouns?: PronounRule[];
   subStyle: SubStyle;
   grade: ColorGrade;
   regions: Partial<Record<RegionKind, Region>>;
@@ -94,6 +98,8 @@ export async function saveProject(saveAs = false, quiet = false): Promise<boolea
     tracks: s.tracks,
     clips: s.clips,
     segments: s.segments,
+    speakers: s.speakers,
+    pronouns: s.pronouns,
     subStyle: s.subStyle,
     grade: s.grade,
     regions: s.regions,
@@ -123,7 +129,7 @@ export async function newProject(): Promise<boolean> {
     const file = await api.createProject(picked.replace(/\.glotalk$/i, ""));
     const dir = dirOf(file);
     // Giữ log và trạng thái job đang chạy (OCR/STT/xuất tự kết thúc và cập nhật các trường này).
-    const { logs: _l, ocr: _o, stt: _s, render: _r, ...blank } = useEditor.getInitialState();
+    const { logs: _l, ocr: _o, stt: _s, render: _r, speakersRun: _p, ...blank } = useEditor.getInitialState();
     S().set({ ...blank, tracks: defaultTracks(), outDir: `${dir}/export`, workDir: `${dir}/work` });
     projectPath = file;
     S().log(t("act.projectCreated", { dir }));
@@ -169,8 +175,9 @@ export async function closeProject(): Promise<boolean> {
   const s = S();
   const hasContent = !!s.video || s.assets.length > 0 || s.segments.length > 0;
   if ((projectPath || hasContent) && !(await saveProject())) return false;
-  const { stt, render } = S();
+  const { stt, render, speakersRun } = S();
   if (stt.running) cancelStt();
+  if (speakersRun.running) cancelSpeakers();
   if (render.running) cancelRender();
   projectPath = "";
   return true;
@@ -205,6 +212,7 @@ export async function openProjectFile(file: string): Promise<boolean> {
       workDir: hasWork ? `${dir}/work` : "",
     });
     S().setSegments(d.segments ?? []);
+    S().set({ speakers: d.speakers ?? [], pronouns: d.pronouns ?? [] });
     projectPath = file;
     addRecentProject(file);
     S().assets.forEach((a) => loadAssetData(a.id));
@@ -285,7 +293,7 @@ export async function extractAudioForStt() {
 }
 
 /** Nhận dạng giọng nói của video chính qua server; câu gốc → `src`, bản dịch → `vi`. */
-export async function runStt(opts: { sourceLanguage: string; targetLanguage: string }) {
+export async function runStt(opts: { sourceLanguage: string; targetLanguage: string; speakers: boolean }) {
   const s = S();
   const { video } = s;
   if (!video) return s.log(t("act.noVideo"));
@@ -304,7 +312,8 @@ export async function runStt(opts: { sourceLanguage: string; targetLanguage: str
     for (const msg of out.warnings) S().log(t("act.sttWarning", { msg }));
     // Người dùng có thể đã mở video khác trong lúc nhận dạng.
     if (S().video?.path !== video.path) return;
-    S().setSegments(out.segments.map((x, i) => ({ id: i + 1, start: x.start, end: x.end, src: x.text, vi: x.translation })));
+    S().setSegments(out.segments.map((x, i) => ({ id: i + 1, start: x.start, end: x.end, src: x.text, vi: x.translation, speaker: x.speaker > 0 ? String(x.speaker) : undefined })));
+    S().setSpeakers(opts.speakers ? speakersFromLabels(out.segments.map((x) => x.speaker), (n) => t("spk.defaultName", { n })) : []);
     S().log(t("act.sttDone", { n: out.segments.length, audio: out.audioSeconds.toFixed(0), secs: out.seconds.toFixed(1) }));
   } catch (e) {
     S().log(t("act.sttStopped", { err: String(e) }));
@@ -316,6 +325,45 @@ export async function runStt(opts: { sourceLanguage: string; targetLanguage: str
 
 export function cancelStt() {
   api.sttCancel().catch(() => {});
+}
+
+/**
+ * Phân biệt người nói theo mốc các câu hiện có (từ OCR, STT hay SRT), chạy trong Editor.
+ * Thay toàn bộ nhãn và danh sách nhân vật; câu không xác định được để trống.
+ */
+export async function detectSpeakers(opts: { threshold: number; speakers: number }) {
+  const s = S();
+  const { video } = s;
+  if (!video) return s.log(t("act.noVideo"));
+  if (!video.has_audio) return s.log(t("spk.noAudio"));
+  if (s.speakersRun.running) return;
+  const segs = s.segments.filter((x) => x.end > x.start);
+  if (!segs.length) return s.log(t("spk.noCaptions"));
+  if (s.speakers.length && !(await confirmDialog(t("spk.confirmReplace", { n: s.speakers.length })))) return;
+
+  s.set({ speakersRun: { running: true, phase: "audio", done: 0, total: segs.length } });
+  s.log(t("spk.start", { n: segs.length }));
+  const unlisten = await listen<SpeakersProgress>("speakers-progress", (e) => S().set({ speakersRun: { ...e.payload, running: true } }));
+  try {
+    const started = performance.now();
+    const out = await api.speakersDetect({ path: video.path, spans: segs.map((x) => ({ start: x.start, end: x.end })), options: opts });
+    if (S().video?.path !== video.path) return;
+    const label = new Map(segs.map((x, i) => [x.id, out.labels[i]]));
+    // Câu có thể đã bị sửa trong lúc chạy; chỉ gán cho câu còn đúng id.
+    S().set({ segments: S().segments.map((x) => (label.has(x.id) ? { ...x, speaker: label.get(x.id)! > 0 ? String(label.get(x.id)) : undefined } : x)) });
+    S().setSpeakers(speakersFromLabels(out.labels, (n) => t("spk.defaultName", { n }), out.speakers));
+    const unknown = out.labels.filter((l) => l === 0).length;
+    S().log(t("spk.done", { n: out.speakers.length, unknown, secs: ((performance.now() - started) / 1000).toFixed(1) }));
+  } catch (e) {
+    S().log(t("spk.stopped", { err: String(e) }));
+  } finally {
+    unlisten();
+    S().set({ speakersRun: { ...S().speakersRun, running: false, phase: "idle" } });
+  }
+}
+
+export function cancelSpeakers() {
+  api.speakersCancel().catch(() => {});
 }
 
 /**
@@ -398,8 +446,9 @@ export async function runTranslate(opts: { source: string; target: string; onlyE
       batch.forEach((seg, j) => {
         const r = out[j];
         // Tìm lại theo khoá: trong lúc chờ server, OCR có thể đã thay danh sách và đánh lại id.
-        const cur = r?.text ? S().segments.find((x) => segKey(x) === segKey(seg)) : undefined;
-        if (cur) S().updateSegment(cur.id, { vi: r.text });
+        const segsNow = S().segments;
+        const idx = r?.text ? segsNow.findIndex((x) => segKey(x) === segKey(seg)) : -1;
+        if (idx >= 0) S().updateSegment(segsNow[idx].id, { vi: opts.target === "vi" ? withPronouns(segsNow, idx, S().pronouns, r.text) : r.text });
         else if (!r?.text) {
           if (!failed) S().log(t("act.trLineFailed", { err: r?.error ?? "?" }));
           failed++;
@@ -417,6 +466,20 @@ export async function runTranslate(opts: { source: string; target: string; onlyE
   } finally {
     S().set({ translate: { ...S().translate, running: false } });
   }
+}
+
+/** Áp lại bảng xưng hô cho mọi câu đã dịch có nhân vật (sau khi sửa bảng hoặc gán lại nhân vật). */
+export function applyPronounsToAll() {
+  const { segments, pronouns } = S();
+  let changed = 0;
+  const next = segments.map((x, i) => {
+    const vi = x.vi ? withPronouns(segments, i, pronouns) : x.vi;
+    if (vi === x.vi) return x;
+    changed++;
+    return { ...x, vi };
+  });
+  S().set({ segments: next });
+  S().log(t("pron.applied", { n: changed }));
 }
 
 export function cancelTranslate() {

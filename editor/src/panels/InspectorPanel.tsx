@@ -4,13 +4,16 @@ import { defaultSubStyle, SubStyle } from "../lib/subStyle";
 import { ColorGrade, defaultGrade } from "../lib/colorGrade";
 import { InspectorTab, timelineEnd, useEditor } from "../store/editor";
 import { ChromaKey, ClipFx, clipFx, trackCode } from "../lib/timeline";
-import { cancelOcr, cancelRender, cancelStt, cancelTranslate, chooseOutDir, ExportRes, exportVideo, extractAudioForStt, runOcr, runStt, runTranslate } from "../store/actions";
+import { applyPronounsToAll, cancelOcr, cancelRender, cancelSpeakers, cancelStt, cancelTranslate, chooseOutDir, detectSpeakers, ExportRes, exportVideo, extractAudioForStt, runOcr, runStt, runTranslate } from "../store/actions";
+import { Gender, VOICES, voiceName } from "../lib/speakers";
+import { ANYONE, listenerOf, PronounRule } from "../lib/pronouns";
 import { Panel } from "../components/Panel";
 import { Check, ColorBtn, Num, Prop, PropGroup, Slider } from "../components/ui";
 import { TKey, useLangName, useT } from "../i18n";
 
 const TABS: { id: InspectorTab; label: TKey }[] = [
   { id: "caption", label: "insp.tabCaption" },
+  { id: "speakers", label: "insp.tabSpeakers" },
   { id: "style", label: "insp.tabStyle" },
   { id: "color", label: "insp.tabColor" },
   { id: "detect", label: "insp.tabDetect" },
@@ -25,6 +28,7 @@ export function InspectorPanel() {
   return (
     <Panel tabs={TABS.map((x) => ({ id: x.id, label: t(x.label) }))} active={tab} onTab={(id) => set({ inspectorTab: id })} className="inspector">
       {tab === "caption" && <CaptionTab />}
+      {tab === "speakers" && <SpeakersTab />}
       {tab === "style" && <StyleTab />}
       {tab === "color" && <ColorTab />}
       {tab === "detect" && <DetectTab />}
@@ -116,9 +120,16 @@ function SegmentTab() {
   const seg = useEditor((s) => s.segments.find((x) => x.id === s.selectedId) ?? null);
   const fps = useEditor((s) => s.video?.fps || 30);
   const video = useEditor((s) => s.video);
+  const speakers = useEditor((s) => s.speakers);
+  // Người nghe tự đoán khi câu chưa đặt tay (chỉ để hiện trong ô chọn).
+  const guessedId = useEditor((s) => {
+    const i = s.segments.findIndex((x) => x.id === s.selectedId);
+    return i >= 0 ? listenerOf(s.segments, i, false) : undefined;
+  });
   const now = () => useEditor.getState().time;
   const { updateSegment, removeSegment, seek, addSegmentAt, splitAt } = useEditor.getState();
   const t = useT();
+  const guessed = speakers.find((sp) => sp.id === guessedId)?.name;
 
   if (!seg)
     return (
@@ -141,8 +152,21 @@ function SegmentTab() {
         </Prop>
         <Prop label={t("insp.duration")}><span className="mono">{formatTime(seg.end - seg.start).slice(3)}</span></Prop>
         <Prop label={t("insp.speaker")}>
-          <input value={seg.speaker ?? ""} placeholder={t("insp.unknown")} onChange={(e) => updateSegment(seg.id, { speaker: e.target.value })} />
+          <select value={seg.speaker ?? ""} onChange={(e) => updateSegment(seg.id, { speaker: e.target.value || undefined })}>
+            <option value="">{t("insp.unknown")}</option>
+            {speakers.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            {/* Dự án cũ lưu tên tự do trong trường này. */}
+            {seg.speaker && !speakers.some((sp) => sp.id === seg.speaker) && <option value={seg.speaker}>{seg.speaker}</option>}
+          </select>
         </Prop>
+        {speakers.length > 1 && (
+          <Prop label={t("pron.listener")}>
+            <select value={seg.listener ?? ""} onChange={(e) => updateSegment(seg.id, { listener: e.target.value || undefined })}>
+              <option value="">{guessed ? t("pron.auto", { name: guessed }) : t("pron.autoNone")}</option>
+              {speakers.filter((sp) => sp.id !== seg.speaker).map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+          </Prop>
+        )}
       </PropGroup>
       <PropGroup title={t("insp.content")}>
         <label className="field">
@@ -160,6 +184,160 @@ function SegmentTab() {
         <button className="danger" onClick={() => removeSegment(seg.id)}>{t("insp.delete")}</button>
       </div>
     </div>
+  );
+}
+
+/** Nhân vật: tự nhận diện theo giọng, đặt tên, giới tính, giọng lồng tiếng, gộp/xoá. */
+function SpeakersTab() {
+  const video = useEditor((s) => s.video);
+  const speakers = useEditor((s) => s.speakers);
+  const segments = useEditor((s) => s.segments);
+  const run = useEditor((s) => s.speakersRun);
+  const { updateSpeaker, addSpeaker, removeSpeaker, mergeSpeaker, seek, set } = useEditor.getState();
+  const [count, setCount] = useState(0);
+  const [threshold, setThreshold] = useState(0.5);
+  const t = useT();
+  const stats = new Map<string, { lines: number; ms: number; first: number }>();
+  let unassigned = 0;
+  for (const g of segments) {
+    if (!g.speaker || !speakers.some((sp) => sp.id === g.speaker)) {
+      unassigned++;
+      continue;
+    }
+    const st = stats.get(g.speaker) ?? { lines: 0, ms: 0, first: g.start };
+    stats.set(g.speaker, { lines: st.lines + 1, ms: st.ms + g.end - g.start, first: Math.min(st.first, g.start) });
+  }
+  const goTo = (ms: number) => {
+    const g = useEditor.getState().segments.find((x) => x.start === ms);
+    seek(ms);
+    if (g) set({ selectedId: g.id, selectedClipId: null });
+  };
+  const nextUnassigned = () => {
+    const s = useEditor.getState();
+    const free = (x: (typeof s.segments)[number]) => !x.speaker || !s.speakers.some((sp) => sp.id === x.speaker);
+    const g = s.segments.find((x) => x.start > s.time + 1 && free(x)) ?? s.segments.find(free);
+    if (g) goTo(g.start);
+  };
+  const pct = run.total ? Math.min(100, (run.done / run.total) * 100) : 0;
+  return (
+    <div className="props">
+      <PropGroup title={t("spk.detectTitle")}>
+        <Prop label={t("spk.count")}><Num value={count} onChange={(v) => setCount(Math.max(0, Math.round(v)))} step={1} min={0} max={50} /></Prop>
+        <p className="muted small">{t("spk.countHint")}</p>
+        {count === 0 && (
+          <>
+            <Prop label={t("spk.threshold")}><Slider value={threshold} min={0.3} max={0.8} step={0.01} def={0.5} format={(v) => v.toFixed(2)} onChange={setThreshold} /></Prop>
+            <p className="muted small">{t("spk.thresholdHint")}</p>
+          </>
+        )}
+        <p className="muted small">{t("spk.detectHint")}</p>
+      </PropGroup>
+      <div className="ocr-run">
+        {run.running ? (
+          <>
+            <div className="ocr-status">
+              <span>
+                {run.phase === "download" ? t("spk.downloading", { done: mb(run.done), total: mb(run.total) })
+                  : run.phase === "model" ? t("spk.loading")
+                  : run.phase === "embed" ? t("spk.embedding", { done: run.done, total: run.total })
+                  : t("spk.audio")}
+              </span>
+            </div>
+            <div className="bar"><div style={{ width: `${run.phase === "embed" || run.phase === "download" ? pct : 0}%` }} /></div>
+            <button onClick={cancelSpeakers}>{t("insp.cancel")}</button>
+          </>
+        ) : (
+          <button className="primary big" disabled={!video || !segments.length} onClick={() => detectSpeakers({ threshold, speakers: count })}>
+            {t("spk.run")}
+          </button>
+        )}
+      </div>
+      <PropGroup title={t("spk.listTitle", { n: speakers.length })}>
+        {!speakers.length && <p className="muted small">{t("spk.empty")}</p>}
+        {speakers.map((sp) => {
+          const st = stats.get(sp.id);
+          return (
+            <div key={sp.id} className="spk-row" style={{ borderLeftColor: sp.color }}>
+              <div className="spk-head">
+                <ColorBtn value={sp.color} onChange={(v) => updateSpeaker(sp.id, { color: v })} />
+                <input value={sp.name} onChange={(e) => updateSpeaker(sp.id, { name: e.target.value })} />
+                <button className="ibtn" title={t("spk.firstLine")} disabled={!st} onClick={() => st && goTo(st.first)}>▶</button>
+                <button className="ibtn" title={t("spk.remove")} onClick={() => removeSpeaker(sp.id)}>✕</button>
+              </div>
+              <p className="muted small">{t("spk.lines", { n: st?.lines ?? 0, secs: ((st?.ms ?? 0) / 1000).toFixed(0) })}</p>
+              <div className="spk-fields">
+                <select value={sp.gender ?? ""} onChange={(e) => updateSpeaker(sp.id, { gender: (e.target.value || null) as Gender | null })}>
+                  <option value="">{t("spk.genderUnknown")}</option>
+                  <option value="male">{t("spk.male")}</option>
+                  <option value="female">{t("spk.female")}</option>
+                </select>
+                <select value={sp.voice} title={t("spk.voice")} onChange={(e) => updateSpeaker(sp.id, { voice: e.target.value })}>
+                  {VOICES.map((v) => <option key={v.id} value={v.id}>{voiceName(v.id)} · {t(v.gender === "male" ? "spk.male" : "spk.female")}</option>)}
+                </select>
+                {speakers.length > 1 && (
+                  <select value="" onChange={(e) => e.target.value && mergeSpeaker(sp.id, e.target.value)}>
+                    <option value="">{t("spk.mergeInto")}</option>
+                    {speakers.filter((x) => x.id !== sp.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <button onClick={() => addSpeaker(t("spk.defaultName", { n: speakers.length + 1 }))}>{t("spk.add")}</button>
+        {unassigned > 0 && segments.length > 0 && (
+          <div className="spk-unassigned">
+            <span className="muted small">{t("spk.unassigned", { n: unassigned })}</span>
+            <button onClick={nextUnassigned}>{t("spk.nextUnassigned")}</button>
+          </div>
+        )}
+        <p className="muted small">{t("spk.shortcutHint")}</p>
+      </PropGroup>
+      {speakers.length > 0 && <PronounsGroup />}
+    </div>
+  );
+}
+
+/** Bảng xưng hô theo cặp nhân vật, áp sau khi dịch sang tiếng Việt. */
+function PronounsGroup() {
+  const speakers = useEditor((s) => s.speakers);
+  const rules = useEditor((s) => s.pronouns);
+  const set = useEditor((s) => s.set);
+  const t = useT();
+  const patch = (i: number, p: Partial<PronounRule>) => set({ pronouns: useEditor.getState().pronouns.map((r, j) => (j === i ? { ...r, ...p } : r)) });
+  const add = () => {
+    // Gợi ý cặp chưa có: người nói đầu tiên với người nghe đầu tiên khác họ.
+    const [a, b] = speakers;
+    set({ pronouns: [...useEditor.getState().pronouns, { from: a.id, to: b?.id ?? ANYONE, self: "", other: "" }] });
+  };
+  return (
+    <PropGroup title={t("pron.title")}>
+      <p className="muted small">{t("pron.hint")}</p>
+      {!rules.length && <p className="muted small">{t("pron.empty")}</p>}
+      {rules.map((r, i) => (
+        <div key={i} className="pron-row">
+          <div className="pron-pair">
+            <select value={r.from} onChange={(e) => patch(i, { from: e.target.value })}>
+              {speakers.map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+            <span className="muted">→</span>
+            <select value={r.to} onChange={(e) => patch(i, { to: e.target.value })}>
+              <option value={ANYONE}>{t("pron.anyone")}</option>
+              {speakers.filter((sp) => sp.id !== r.from).map((sp) => <option key={sp.id} value={sp.id}>{sp.name}</option>)}
+            </select>
+            <button className="ibtn" title={t("insp.delete")} onClick={() => set({ pronouns: useEditor.getState().pronouns.filter((_, j) => j !== i) })}>✕</button>
+          </div>
+          <div className="pron-words">
+            <input value={r.self} placeholder={t("pron.self")} title={t("pron.self")} onChange={(e) => patch(i, { self: e.target.value })} />
+            <input value={r.other} placeholder={t("pron.other")} title={t("pron.other")} onChange={(e) => patch(i, { other: e.target.value })} />
+          </div>
+        </div>
+      ))}
+      <div className="btn-row">
+        <button onClick={add}>{t("pron.add")}</button>
+        <button disabled={!rules.length} onClick={applyPronounsToAll}>{t("pron.apply")}</button>
+      </div>
+    </PropGroup>
   );
 }
 
@@ -271,6 +449,7 @@ function DetectTab() {
   const set = useEditor((s) => s.set);
   const [sttFrom, setSttFrom] = useState("auto");
   const [sttTo, setSttTo] = useState("vi");
+  const [sttSpeakers, setSttSpeakers] = useState(false);
   const [method, setMethod] = useState<"ocr" | "stt">("ocr");
   const [scanFps, setScanFps] = useState(10);
   const [model, setModel] = useState<OcrModel>("small");
@@ -310,6 +489,8 @@ function DetectTab() {
                 {STT_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
               </select>
             </Prop>
+            <Check checked={sttSpeakers} onChange={setSttSpeakers}>{t("spk.sttSpeakers")}</Check>
+            {sttSpeakers && <p className="muted small">{t("spk.sttSpeakersHint")}</p>}
             <button disabled={!video || stt.running} onClick={extractAudioForStt}>{t("insp.extractAudio")}</button>
           </PropGroup>
           <div className="ocr-run">
@@ -328,7 +509,7 @@ function DetectTab() {
               </>
             ) : (
               <button className="primary big" disabled={!video}
-                onClick={() => runStt({ sourceLanguage: sttFrom, targetLanguage: sttTo })}>
+                onClick={() => runStt({ sourceLanguage: sttFrom, targetLanguage: sttTo, speakers: sttSpeakers })}>
                 {t("insp.runStt")}
               </button>
             )}

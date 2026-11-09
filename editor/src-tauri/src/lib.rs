@@ -4,6 +4,7 @@ mod error;
 mod media;
 pub mod ocr;
 pub mod project;
+pub mod speakers;
 mod stt;
 
 use tauri::Manager;
@@ -36,6 +37,7 @@ pub fn run() {
         .manage(commands::OcrState::default())
         .manage(commands::RenderState::default())
         .manage(commands::SttState::default())
+        .manage(commands::SpeakersState::default())
         .setup(|app| {
             if let Err(e) = prepare_models(app) {
                 eprintln!("Không chuẩn bị được model OCR: {e}");
@@ -66,6 +68,8 @@ pub fn run() {
             commands::stt_check,
             commands::stt_transcribe,
             commands::stt_cancel,
+            commands::speakers_detect,
+            commands::speakers_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
