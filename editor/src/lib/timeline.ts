@@ -2,7 +2,8 @@ import { MediaInfo } from "./api";
 
 /**
  * Mô hình timeline đa track. Thời gian là mili giây nguyên.
- * Track "caption" là track phụ đề đặc biệt (OCR/dịch/TTS), nội dung nằm ở `segments` của store, không phải `clips`.
+ * Track "caption" là track phụ đề đặc biệt (OCR/dịch/TTS), nội dung nằm ở `segments` của store, không phải `clips`:
+ * mỗi câu có câu gốc (`src`) và bản dịch (`vi`) chung mốc thời gian, ẩn/hiện riêng từng dòng.
  */
 export type TrackKind = "video" | "audio" | "text" | "caption";
 
@@ -15,12 +16,19 @@ export interface Track {
   dub?: boolean;
   /** Do app tự tạo khi thả/thêm clip mà không còn chỗ: tự bỏ đi khi không còn clip nào. */
   auto?: boolean;
+  /** Track phụ đề: `hidden` là ẩn bản dịch, `srcHidden` là ẩn câu gốc. */
   hidden: boolean;
+  srcHidden?: boolean;
   locked: boolean;
   muted: boolean;
   solo: boolean;
   /** 0..1 */
   gain: number;
+  /** Âm lượng riêng tai trái/phải 0..1, nhân thêm vào `gain`; thiếu là 1. */
+  gainL?: number;
+  gainR?: number;
+  /** Chiều cao track do người dùng kéo (px); thiếu thì dùng mặc định theo loại. */
+  height?: number;
 }
 
 export interface MediaAsset extends MediaInfo {
@@ -105,6 +113,29 @@ export function displayOrder(tracks: Track[]): Track[] {
 export function trackCode(tracks: Track[], tk: Track): string {
   const n = tracks.filter((t) => t.kind === tk.kind).indexOf(tk) + 1;
   return { video: "V", audio: "A", text: "T", caption: "C" }[tk.kind] + n;
+}
+
+/** Track phụ đề có ẩn hết cả hai dòng không. */
+export const trackHidden = (tk: Track) => tk.hidden && (tk.kind !== "caption" || !!tk.srcHidden);
+
+/**
+ * Chỉ giữ một track phụ đề. Dự án cũ có C1 (gốc) + C2 (dịch): gộp lại, mắt C1 thành mắt câu gốc, mắt C2 thành mắt bản dịch.
+ * Dự án chưa có track phụ đề thì thêm vào.
+ */
+export function withCaptionTracks(tracks: Track[]): Track[] {
+  const caps = tracks.filter((t) => t.kind === "caption");
+  if (caps.length === 1) return tracks;
+  if (!caps.length) return [...tracks, newTrack("c1", "caption")];
+  const [c1, c2] = caps;
+  const merged: Track = { ...c1, hidden: c2.hidden, srcHidden: c1.hidden, locked: c1.locked || c2.locked };
+  return tracks.filter((t) => t.kind !== "caption" || t === c1).map((t) => (t === c1 ? merged : t));
+}
+
+/** Chữ phụ đề lên hình: câu gốc ở trên, bản dịch ở dưới, bỏ dòng đang ẩn hoặc rỗng. */
+export function captionText(tracks: Track[], seg: { src: string; vi: string }): string {
+  const cap = tracks.find((t) => t.kind === "caption");
+  if (!cap) return "";
+  return [!cap.srcHidden && seg.src, !cap.hidden && seg.vi].filter(Boolean).join("\n");
 }
 
 /** Loại track nhận được loại media này. */

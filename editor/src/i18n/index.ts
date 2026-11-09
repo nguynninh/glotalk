@@ -66,3 +66,21 @@ export function useT() {
   const lang = useLang((s) => s.lang);
   return (key: TKey, vars?: Vars) => translate(lang, key, vars);
 }
+
+/** Tên ngôn ngữ theo mã ISO 639-1, viết bằng ngôn ngữ giao diện ("vi" → "Tiếng Việt" / "Vietnamese"). */
+function languageName(lang: Lang, code: string): string {
+  try {
+    return new Intl.DisplayNames([lang], { type: "language" }).of(code) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
+}
+
+/** Tên ngôn ngữ ngoài React, theo ngôn ngữ giao diện hiện tại. */
+export const langName = (code: string) => languageName(useLang.getState().lang, code);
+
+/** Hook tên ngôn ngữ cho component, vẽ lại khi đổi ngôn ngữ giao diện. */
+export function useLangName() {
+  const lang = useLang((s) => s.lang);
+  return (code: string) => languageName(lang, code);
+}

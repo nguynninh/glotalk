@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, formatTime, formatTimecode, OcrModel, ToolStatus } from "../lib/api";
+import { api, formatTime, formatTimecode, OcrModel, STT_LANGUAGES, ToolStatus } from "../lib/api";
 import { defaultSubStyle, SubStyle } from "../lib/subStyle";
 import { ColorGrade, defaultGrade } from "../lib/colorGrade";
 import { InspectorTab, timelineEnd, useEditor } from "../store/editor";
 import { ChromaKey, ClipFx, clipFx, trackCode } from "../lib/timeline";
-import { cancelOcr, cancelRender, chooseOutDir, ExportRes, exportVideo, extractAudioForStt, runOcr } from "../store/actions";
+import { cancelOcr, cancelRender, cancelStt, cancelTranslate, chooseOutDir, ExportRes, exportVideo, extractAudioForStt, runOcr, runStt, runTranslate } from "../store/actions";
 import { Panel } from "../components/Panel";
 import { Check, ColorBtn, Num, Prop, PropGroup, Slider } from "../components/ui";
-import { TKey, useT } from "../i18n";
+import { TKey, useLangName, useT } from "../i18n";
 
 const TABS: { id: InspectorTab; label: TKey }[] = [
   { id: "caption", label: "insp.tabCaption" },
@@ -258,24 +258,34 @@ function ColorTab() {
   );
 }
 
+const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
+
 function DetectTab() {
   const video = useEditor((s) => s.video);
   const regions = useEditor((s) => s.regions);
   const linkOcr = useEditor((s) => s.linkOcr);
   const selecting = useEditor((s) => s.selectingRegion);
   const ocr = useEditor((s) => s.ocr);
+  const ocrResume = useEditor((s) => s.ocrResume);
+  const stt = useEditor((s) => s.stt);
   const set = useEditor((s) => s.set);
+  const [sttFrom, setSttFrom] = useState("auto");
+  const [sttTo, setSttTo] = useState("vi");
   const [method, setMethod] = useState<"ocr" | "stt">("ocr");
   const [scanFps, setScanFps] = useState(10);
   const [model, setModel] = useState<OcrModel>("small");
   const [everyFrame, setEveryFrame] = useState(false);
   const [fullFrame, setFullFrame] = useState(false);
   const t = useT();
+  const langName = useLangName();
   const txt = (k: "dialog" | "ocr") => {
     const r = regions[k];
     return r ? `${(r.x * 100).toFixed(0)}, ${(r.y * 100).toFixed(0)} · ${(r.w * 100).toFixed(0)}×${(r.h * 100).toFixed(0)}%` : t("insp.regionUnset");
   };
   const pct = ocr.total ? Math.min(100, (ocr.done / ocr.total) * 100) : 0;
+  const resume = video && ocrResume?.path === video.path ? ocrResume : null;
+  const ocrOpts = { scanFps, model, everyFrame, fullFrame };
+  const sttPct = stt.totalS ? Math.min(100, (stt.doneS / stt.totalS) * 100) : 0;
   return (
     <div className="props">
       <PropGroup title={t("insp.subSource")}>
@@ -283,13 +293,48 @@ function DetectTab() {
           <button className={method === "ocr" ? "on" : ""} onClick={() => setMethod("ocr")}>{t("insp.methodOcr")}</button>
           <button className={method === "stt" ? "on" : ""} onClick={() => setMethod("stt")}>{t("insp.methodStt")}</button>
         </div>
-        {method === "stt" && (
-          <>
-            <p className="muted small">{t("insp.sttHint")}</p>
-            <button disabled={!video} onClick={extractAudioForStt}>{t("insp.extractAudio")}</button>
-          </>
-        )}
+        {method === "stt" && <p className="muted small">{t("insp.sttHint")}</p>}
       </PropGroup>
+      {method === "stt" && (
+        <>
+          <PropGroup title={t("insp.methodStt")}>
+            <Prop label={t("insp.sttFrom")}>
+              <select value={sttFrom} onChange={(e) => setSttFrom(e.target.value)} disabled={stt.running}>
+                <option value="auto">{t("insp.sttAuto")}</option>
+                {STT_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+              </select>
+            </Prop>
+            <Prop label={t("insp.sttTo")}>
+              <select value={sttTo} onChange={(e) => setSttTo(e.target.value)} disabled={stt.running}>
+                <option value="">{t("insp.sttNoTranslate")}</option>
+                {STT_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+              </select>
+            </Prop>
+            <button disabled={!video || stt.running} onClick={extractAudioForStt}>{t("insp.extractAudio")}</button>
+          </PropGroup>
+          <div className="ocr-run">
+            {stt.running ? (
+              <>
+                <div className="ocr-status">
+                  <span>
+                    {stt.phase === "audio" ? t("insp.sttAudio")
+                      : stt.phase === "connect" ? t("insp.sttConnect")
+                      : t("insp.sttProgress", { done: stt.doneS.toFixed(0), total: stt.totalS.toFixed(0) })}
+                  </span>
+                </div>
+                <div className="bar"><div style={{ width: `${sttPct}%` }} /></div>
+                {stt.lastText && <p className="ocr-last">{stt.lastText}</p>}
+                <button onClick={cancelStt}>{t("insp.cancel")}</button>
+              </>
+            ) : (
+              <button className="primary big" disabled={!video}
+                onClick={() => runStt({ sourceLanguage: sttFrom, targetLanguage: sttTo })}>
+                {t("insp.runStt")}
+              </button>
+            )}
+          </div>
+        </>
+      )}
       {method === "ocr" && (
         <>
           <PropGroup title={t("insp.detectRegion")}>
@@ -336,23 +381,81 @@ function DetectTab() {
             {ocr.running ? (
               <>
                 <div className="ocr-status">
-                  <span>{ocr.phase === "model" ? t("insp.loadingModel") : t("insp.scanning", { pct: Math.round(pct) })}</span>
-                  <span className="muted mono">{t("insp.ocrCalls", { n: ocr.ocrCalls })}</span>
+                  <span>
+                    {ocr.phase === "download" ? t("insp.downloadingModel", { done: mb(ocr.done), total: mb(ocr.total) })
+                      : ocr.phase === "model" ? t("insp.loadingModel")
+                      : t("insp.scanning", { pct: pct.toFixed(1), time: formatTime(((video?.duration_ms ?? 0) * pct) / 100), total: formatTime(video?.duration_ms ?? 0) })}
+                  </span>
+                  {ocr.phase === "ocr" && <span className="muted mono">{t("insp.ocrCalls", { n: ocr.ocrCalls })}</span>}
                 </div>
                 <div className="bar"><div style={{ width: `${pct}%` }} /></div>
                 {ocr.lastText && <p className="ocr-last">{ocr.lastText}</p>}
                 <button onClick={cancelOcr}>{t("insp.cancel")}</button>
               </>
+            ) : resume ? (
+              <>
+                <p className="muted small">
+                  {t("insp.ocrResumeAt", { time: formatTime(resume.doneMs), pct: Math.round((resume.doneMs / Math.max(1, video!.duration_ms)) * 100) })}
+                </p>
+                <button className="primary big" onClick={() => runOcr(ocrOpts, true)}>{t("insp.resumeOcr")}</button>
+                <button onClick={() => runOcr(ocrOpts)}>{t("insp.restartOcr")}</button>
+              </>
             ) : (
-              <button className="primary big" disabled={!video}
-                onClick={() => runOcr({ scanFps, model, everyFrame, fullFrame })}>
+              <button className="primary big" disabled={!video} onClick={() => runOcr(ocrOpts)}>
                 {t("insp.runOcr")}
               </button>
             )}
           </div>
         </>
       )}
+      <TranslatePanel />
     </div>
+  );
+}
+
+/** Dịch cột gốc đã có (từ OCR, STT không dịch hoặc SRT nhập) sang ngôn ngữ đích. */
+function TranslatePanel() {
+  const tr = useEditor((s) => s.translate);
+  const busy = useEditor((s) => s.stt.running);
+  const ocrRunning = useEditor((s) => s.ocr.running);
+  const sources = useEditor((s) => s.segments.filter((x) => x.src.trim()).length);
+  const [from, setFrom] = useState("auto");
+  const [to, setTo] = useState("vi");
+  const [onlyEmpty, setOnlyEmpty] = useState(true);
+  const t = useT();
+  const langName = useLangName();
+  return (
+    <>
+      <PropGroup title={t("insp.trTitle")}>
+        <p className="muted small">{t("insp.trHint")}</p>
+        <Prop label={t("insp.trFrom")}>
+          <select value={from} onChange={(e) => setFrom(e.target.value)} disabled={tr.running}>
+            <option value="auto">{t("insp.sttAuto")}</option>
+            {STT_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+          </select>
+        </Prop>
+        <Prop label={t("insp.sttTo")}>
+          <select value={to} onChange={(e) => setTo(e.target.value)} disabled={tr.running}>
+            {STT_LANGUAGES.map((l) => <option key={l} value={l}>{langName(l)}</option>)}
+          </select>
+        </Prop>
+        <Check checked={onlyEmpty} onChange={setOnlyEmpty}>{t("insp.trOnlyEmpty")}</Check>
+      </PropGroup>
+      <div className="ocr-run">
+        {tr.running ? (
+          <>
+            <div className="ocr-status"><span>{t("insp.trProgress", { done: tr.done, total: tr.total })}</span></div>
+            <div className="bar"><div style={{ width: `${tr.total ? (tr.done / tr.total) * 100 : 0}%` }} /></div>
+            <button onClick={cancelTranslate}>{t("insp.cancel")}</button>
+          </>
+        ) : (
+          <button className="primary big" disabled={(!sources && !ocrRunning) || busy}
+            onClick={() => runTranslate({ source: from, target: to, onlyEmpty })}>
+            {t("insp.runTranslate", { n: sources })}
+          </button>
+        )}
+      </div>
+    </>
   );
 }
 

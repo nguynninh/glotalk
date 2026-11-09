@@ -38,6 +38,7 @@ React webview (src/)  ──invoke()──>  Rust core (src-tauri/src/)  ──s
 | `src-tauri/src/error.rs` | `AppError`, serialised to the frontend as a plain string | UI wording beyond the message |
 | `src-tauri/src/media/ffmpeg.rs` | Tool discovery, probing, audio extraction, waveform peaks, thumbnails, cache directories | Editor state |
 | `src-tauri/src/ocr/` | Hard-subtitle extraction: frame decode, change filter, PaddleOCR, merging into timed segments | Tauri types — it is a plain library module |
+| `src-tauri/src/stt.rs` | WebSocket client for the Glotalk server's speech recognition (`server/docs/streaming-audio.md`): PCM decode, session protocol, timing alignment | UI state |
 | `src-tauri/src/project.rs` | Shared data model (`Segment`, `Region`) intended for reuse by a Rust server | Tauri or UI concerns |
 | `src/lib/api.ts` | Typed wrappers around every `invoke()`, IPC types, timecode formatting, `localStorage` settings | React components |
 | `src/lib/srt.ts` | SRT parse/serialise and the frontend `Segment` type (the canonical caption shape) | Store access |
@@ -68,6 +69,8 @@ Registered in `lib.rs`, wrapped in `src/lib/api.ts`:
 | `ocr_cancel` | Sets the cancellation flag of the running OCR job | Command thread (sync) |
 | `read_text` / `write_text` | Plain file I/O for SRT and project files | Command thread (sync) |
 | `overlay_begin` / `overlay_write` | Fresh temp folder for an export's text/caption PNGs; `overlay_write` takes raw bytes with the file name in the `x-name` header | Command thread (sync) |
+| `stt_check` | Opens a recognition-only session on the server, waits for `ready`, closes; returns the round trip | async (tokio) |
+| `stt_transcribe` / `stt_cancel` | Streams the file's audio to the server and returns timed transcript + translation; progress as `stt-progress` events | async (tokio); ffmpeg decode in `spawn_blocking` |
 | `render_video` / `render_cancel` | Export the timeline with one ffmpeg run (`media/render.rs`); progress as `render-progress` events | `spawn_blocking` |
 
 Tauri maps camelCase JavaScript argument names (`perSecond`, `durationMs`) to the
@@ -274,9 +277,29 @@ similarity, not exact equality.
 The Export tab lists five steps — extraction, translation, analysis, dubbing and
 video export. Extraction (hard-subtitle OCR, audio extraction for STT) and the
 "Xuất video" button (timeline export, see above) exist; "Chạy pipeline" and the
-pipeline's run button only write a log line. The Glotalk server (STT,
-translation, TTS) is configured in Settings but never called. Resolution and
+pipeline's run button only write a log line. Speech recognition and its
+live translation call the Glotalk server (see below); TTS and server-side dubbing
+are not called. Resolution and
 encoder apply to "Xuất video"; the checkpoint option is UI only.
+
+## Glotalk server
+
+`stt.rs` speaks the server's streaming WebSocket protocol from Rust, because the
+server checks the `Origin` header and the webview cannot set it. An `https://`
+(or bare) address becomes `wss://` with `Origin: https://<host>`; `http://`/`ws://`
+uses the server's built-in local origin `http://127.0.0.1:8765`. The token in
+Settings is not sent: live sessions have no authentication (the token is for dub
+jobs only).
+
+The whole file is decoded to 16 kHz PCM16 in memory and sent in 100 ms messages;
+the server applies backpressure. While translating, the sender pauses when more
+than 24 finished lines lack a `live` translation, because the server stops
+translating at 64 queued lines.
+
+`final` events carry no timestamps. Each line takes the last `progress` position
+(reported about once per second of audio) before its first `partial` and before its
+`final`, and `align` then moves both edges to voiced 20 ms frames of the local audio.
+Times are therefore estimates; expect to adjust them on the timeline.
 
 ## Security configuration
 

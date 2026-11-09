@@ -12,6 +12,11 @@ no build has been released yet.
 
 ### Added
 
+- Subtitle translation in the Detect tab: the source column is translated into a
+  target language through the Glotalk server's `POST /translate` (signed-in
+  accounts only), in order and 10 lines at a time with the 5 previous lines as
+  context, with progress and Cancel. By default only lines without a translation
+  are sent; overwriting existing translations asks first.
 - Tauri 2 desktop shell with a React 19 + Zustand editor: Project, Monitor and
   Inspector panels above a timeline, with draggable splitters. Panel sizes are
   remembered between sessions.
@@ -73,12 +78,21 @@ no build has been released yet.
 
 The frontend does not type-check while this work is unfinished.
 
+- Speech recognition through the Glotalk server (Inspector › Detect › "STT giọng
+  nói"): choose the spoken and target language, see progress, cancel. The
+  transcript fills the source column and the server's translation the Vietnamese
+  one. Settings defaults to `https://stt.qiverse.top` and has a
+  "Kiểm tra kết nối" button.
+
+- OCR shows download progress (MB done/total and a bar) while fetching a model
+  that is not on disk yet, instead of a single "loading model" line.
+
 ### Known limitations
 
 - The Small OCR model reads simplified "别" as traditional "別".
-- Glotalk server calls (STT, translation, TTS), dubbing and video export are not
-  connected. "Chạy pipeline" and the Export tab's run button only write a log
-  line.
+- Speech-recognition timings are estimated (the server sends none) and need
+  checking on the timeline. Server TTS and dubbing are not connected.
+  "Chạy pipeline" and the Export tab's run button only write a log line.
 - Colour correction is preview-only and may differ slightly once mapped to
   ffmpeg filters at export.
 - Derived files in the temp directory are never cleaned up.

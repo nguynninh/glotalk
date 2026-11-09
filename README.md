@@ -6,7 +6,7 @@ Monorepo for the Glotalk translation and dubbing apps.
 |---|---|---|
 | [`android/`](android/) | Glotalk Android app: on-screen, text and audio translation | Kotlin, Jetpack Compose |
 | [`editor/`](editor/) | Glotalk Editor: desktop subtitle/dubbing editor with OCR | Tauri 2, React, Rust |
-| [`server/`](server/) | Onplay STT: offline speech recognition, translation, TTS and dubbing server | Rust |
+| [`server/`](server/) | Onplay STT: offline speech recognition, translation, TTS and dubbing server, running at <https://stt.qiverse.top> | Rust |
 
 Each directory is self-contained: build instructions, architecture notes and the
 changelog live in its own `README.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md` and

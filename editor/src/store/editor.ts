@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { MediaInfo, Region, VideoInfo } from "../lib/api";
+import { MediaInfo, OcrModel, Region, VideoInfo } from "../lib/api";
 import { acceptsAsset, Clip, clipEnd, contentEnd, displayOrder, fits, MediaAsset, MIN_CLIP_MS, newTrack, pruneTracks, STILL_MS, Track, TrackKind } from "../lib/timeline";
 import { Segment } from "../lib/srt";
 import { defaultSubStyle, SubStyle } from "../lib/subStyle";
@@ -9,11 +9,36 @@ import { t } from "../i18n";
 export type RegionKind = "dialog" | "ocr";
 export interface OcrState {
   running: boolean;
-  phase: "idle" | "model" | "ocr" | "done";
+  phase: "idle" | "download" | "model" | "ocr" | "done";
   done: number;
   total: number;
   ocrCalls: number;
   lastText: string;
+}
+
+/** OCR dở dang của video `path`: quét tiếp từ `doneMs` với đúng tham số cũ. Lưu trong file dự án. */
+export interface OcrResume {
+  path: string;
+  doneMs: number;
+  region: Region | null;
+  scanFps: number;
+  model: OcrModel;
+  everyFrame: boolean;
+}
+
+export interface SttState {
+  running: boolean;
+  phase: "idle" | "audio" | "connect" | "stt";
+  doneS: number;
+  totalS: number;
+  lastText: string;
+}
+
+/** Dịch cột gốc sang ngôn ngữ đích qua server (`runTranslate`). */
+export interface TranslateState {
+  running: boolean;
+  done: number;
+  total: number;
 }
 
 export type InspectorTab = "caption" | "style" | "color" | "detect" | "export";
@@ -47,6 +72,8 @@ interface EditorState {
   /** Video chính: quyết định fps/khung hình của sequence, là nguồn cho preview và OCR. */
   video: VideoInfo | null;
   outDir: string;
+  /** Thư mục file trung gian (wav cho STT…) của dự án; rỗng thì dùng `outDir`. */
+  workDir: string;
   peaksPerSec: number;
 
   assets: MediaAsset[];
@@ -86,6 +113,9 @@ interface EditorState {
   mix: AudioMix;
   logs: string[];
   ocr: OcrState;
+  ocrResume: OcrResume | null;
+  stt: SttState;
+  translate: TranslateState;
 
   set: (p: Partial<EditorState>) => void;
   log: (msg: string) => void;
@@ -122,6 +152,7 @@ const now = () => new Date().toLocaleTimeString("vi-VN", { hour12: false });
 export const useEditor = create<EditorState>((set, get) => ({
   video: null,
   outDir: "",
+  workDir: "",
   peaksPerSec: 50,
   assets: [],
   tracks: defaultTracks(),
@@ -149,6 +180,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   mix: loadMix(),
   logs: [`[${now()}] ${t("store.ready")}`],
   ocr: { running: false, phase: "idle", done: 0, total: 0, ocrCalls: 0, lastText: "" },
+  ocrResume: null,
+  stt: { running: false, phase: "idle", doneS: 0, totalS: 0, lastText: "" },
+  translate: { running: false, done: 0, total: 0 },
 
   set: (p) => set(p),
   log: (msg) => set((s) => ({ logs: [...s.logs.slice(-499), `[${now()}] ${msg}`] })),

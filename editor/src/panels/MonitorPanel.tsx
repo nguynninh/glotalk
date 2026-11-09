@@ -4,7 +4,7 @@ import { formatTimecode, Region } from "../lib/api";
 import { subStyleCss } from "../lib/subStyle";
 import { gradeCssFilter, wbOverlay } from "../lib/colorGrade";
 import { layerRect, samplePixel } from "../lib/compositor";
-import { clipAt, clipFx } from "../lib/timeline";
+import { captionText, clipAt, clipFx } from "../lib/timeline";
 import { currentSegment, RegionKind, sequenceSize, timelineEnd, useEditor } from "../store/editor";
 import { importMedia } from "../store/actions";
 import { TKey, useT } from "../i18n";
@@ -112,9 +112,8 @@ export function MonitorPanel() {
   };
 
   const fps = video?.fps || 30;
-  const text = seg ? seg.vi || seg.src : "";
+  const text = seg ? captionText(tracks, seg) : "";
   const wb = wbOverlay(grade);
-  const captionHidden = tracks.find((x) => x.kind === "caption")?.hidden;
 
   return (
     <div className="monitor">
@@ -157,7 +156,7 @@ export function MonitorPanel() {
               </div>
             ) : null;
           })}
-        {box && subStyle.enabled && !captionHidden && text && (
+        {box && subStyle.enabled && text && (
           <div className="sub-layer" style={{ left: box.left, width: box.width, top: box.top + box.height * subStyle.posY }}>
             <span style={subStyleCss(subStyle, box.scale)}>{text}</span>
           </div>

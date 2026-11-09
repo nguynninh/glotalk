@@ -10,7 +10,9 @@
 //! audio, recognized text, tokens or video links.
 //!
 //! Dub jobs are on when `ONPLAY_DUB_TOKENS` (default `dub-tokens` in the root) lists tester
-//! tokens; their results are then served on `http://127.0.0.1:8767`.
+//! tokens; their results are served on `http://127.0.0.1:8767`, which also answers editor
+//! sign-in for the accounts in `ONPLAY_AUTH_USERS` (default `auth-users`).
+//! `onplay-server --hash-password` reads a password on stdin and prints its account hash.
 
 mod log;
 
@@ -21,6 +23,15 @@ use onplay_server::config::{parse_max_sessions, Capture};
 use onplay_server::{Config, Services, Silent};
 
 fn main() -> ExitCode {
+    if std::env::args().nth(1).as_deref() == Some("--hash-password") {
+        let mut password = String::new();
+        if std::io::stdin().read_line(&mut password).is_err() || password.trim_end_matches(['\r', '\n']).is_empty() {
+            eprintln!("Error: give the password on stdin.");
+            return ExitCode::FAILURE;
+        }
+        println!("{}", onplay_server::auth::hash_password(password.trim_end_matches(['\r', '\n'])));
+        return ExitCode::SUCCESS;
+    }
     let executable = std::env::current_exe().ok().and_then(|path| path.canonicalize().ok());
     let directory = executable.as_ref().and_then(|path| path.parent()).map(PathBuf::from).unwrap_or_default();
     let root = std::env::var_os("ONPLAY_ROOT").map_or_else(|| directory.parent().map(PathBuf::from).unwrap_or_default(), PathBuf::from);
@@ -44,7 +55,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let downloads = match config.dub_tokens.is_file().then(|| onplay_server::bind_downloads(&config)).transpose() {
+    let downloads = match onplay_server::bind_downloads(&config).map(Some) {
         Ok(downloads) => downloads,
         Err(error) => {
             eprintln!("Error: cannot listen on {}: {error}", config.download_address);
@@ -73,6 +84,10 @@ fn main() -> ExitCode {
     match services.jobs.disabled() {
         None => println!("Dub jobs: on, results on http://{} (jobs in {})", config.download_address, config.job_dir.display()),
         Some(reason) => println!("Dub jobs: off ({reason})"),
+    }
+    match services.auth.accounts() {
+        Ok(count) => println!("Sign-in: {count} account(s) in {}, on http://{}/auth/", config.auth_users.display(), config.download_address),
+        Err(reason) => println!("Sign-in: no accounts ({reason})"),
     }
     match onplay_server::serve(services, listener, downloads) {
         Ok(()) => ExitCode::SUCCESS,

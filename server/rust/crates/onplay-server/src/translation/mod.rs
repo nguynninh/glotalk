@@ -1,8 +1,10 @@
 //! Bounded client for the local translation router; no model code in the server.
 
+mod batch;
 mod client;
 mod retry;
 
+pub use batch::{translate_batch, MAX_LINES};
 pub use client::Translator;
 pub use retry::wait_busy;
 

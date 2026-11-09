@@ -119,8 +119,14 @@ translation router. They run one at a time; `ONPLAY_JOB_DIR` (default `jobs/`),
 `ONPLAY_DUB_MAX_SECONDS` (default 900) and `ONPLAY_JOB_MAX_GB` (default 20) set where
 files go, the longest video and the disk limit. Files are deleted 24 h after a job
 ends and at every start. For the public service the tunnel must also send
-`stt.qiverse.top` paths matching `^/jobs/` to `http://127.0.0.1:8767`, before its
-catch-all rule for 8766.
+`stt.qiverse.top` paths matching `^/(jobs|auth|translate)` to `http://127.0.0.1:8767`,
+before its catch-all rule for 8766.
+
+The same port translates subtitle lines for a signed-in editor: `POST /translate` with
+`Authorization: Bearer <token>` and `{"source":"auto","target":"vi","texts":[..],
+"context":[..]}` returns `{"translations":[{"text":".."} | {"error":".."}]}` in order.
+At most 50 lines per request; each goes to the router in `context` mode with the five
+previous lines (`context` first), so send long subtitles in order, a batch at a time.
 
 ## Live translation
 

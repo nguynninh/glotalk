@@ -84,6 +84,8 @@ pub struct Config {
     pub job_max_bytes: u64,
     /// `ONPLAY_DUB_LOCAL_LINKS=1` accepts links to local hosts; for tests only.
     pub dub_local_links: bool,
+    /// `ONPLAY_AUTH_USERS`: editor accounts, `name argon2-PHC` lines.
+    pub auth_users: PathBuf,
 }
 
 /// A positive session count; `None` otherwise.
@@ -123,6 +125,7 @@ impl Config {
             dub_max_seconds: env("ONPLAY_DUB_MAX_SECONDS").and_then(|value| value.trim().parse().ok()).filter(|seconds: &f64| *seconds > 0.0).unwrap_or(DUB_MAX_SECONDS),
             job_max_bytes: env("ONPLAY_JOB_MAX_GB").and_then(|value| value.trim().parse().ok()).unwrap_or(JOB_MAX_GB) << 30,
             dub_local_links: env("ONPLAY_DUB_LOCAL_LINKS").is_some_and(|value| value == "1"),
+            auth_users: env("ONPLAY_AUTH_USERS").map_or_else(|| root.join("auth-users"), PathBuf::from),
         }
     }
 }

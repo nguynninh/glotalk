@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { formatTime, formatTimecode } from "../lib/api";
 import { useEditor } from "../store/editor";
-import { exportSrt, importMedia, importSrt } from "../store/actions";
+import { confirmDialog, exportSrt, importMedia, importSrt } from "../store/actions";
 import { MediaAsset } from "../lib/timeline";
 import { timelineDropTarget } from "./TimelinePanel";
 import { Panel } from "../components/Panel";
@@ -67,9 +67,9 @@ function MediaTab() {
     window.addEventListener("pointerup", up);
   };
 
-  const remove = (a: MediaAsset) => {
+  const remove = async (a: MediaAsset) => {
     const n = clips.filter((c) => c.assetId === a.id).length;
-    if (!n || window.confirm(t("proj.confirmRemoveAsset", { name: a.path.replace(/^.*[\\/]/, ""), n }))) useEditor.getState().removeAsset(a.id);
+    if (!n || (await confirmDialog(t("proj.confirmRemoveAsset", { name: a.path.replace(/^.*[\\/]/, ""), n })))) useEditor.getState().removeAsset(a.id);
   };
 
   return (

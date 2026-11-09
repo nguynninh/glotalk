@@ -46,22 +46,29 @@ pub struct FrameReader {
     spec: CropSpec,
     fps: f64,
     index: u64,
+    start_ms: u64,
 }
 
 impl FrameReader {
-    pub fn spawn(path: &str, spec: CropSpec, fps: f64) -> AppResult<Self> {
+    /// `start_ms` > 0: tua tới mốc đó trước khi đọc (quét tiếp); thời điểm trả về vẫn tính từ đầu video.
+    pub fn spawn(path: &str, spec: CropSpec, fps: f64, start_ms: u64) -> AppResult<Self> {
         let vf = format!(
             "fps={fps:.6},crop={}:{}:{}:{},scale={}:{}:flags=area",
             spec.w, spec.h, spec.x, spec.y, spec.out_w, spec.out_h
         );
-        let mut child = Command::new(find_tool("ffmpeg")?)
-            .args(["-hide_banner", "-loglevel", "error", "-nostdin", "-i", path, "-an", "-sn", "-vf", &vf])
+        let mut cmd = Command::new(find_tool("ffmpeg")?);
+        cmd.args(["-hide_banner", "-loglevel", "error", "-nostdin"]);
+        if start_ms > 0 {
+            cmd.args(["-ss", &format!("{:.3}", start_ms as f64 / 1000.0)]);
+        }
+        let mut child = cmd
+            .args(["-i", path, "-an", "-sn", "-vf", &vf])
             .args(["-pix_fmt", "rgb24", "-f", "rawvideo", "-"])
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()?;
         let stdout = child.stdout.take().expect("stdout");
-        Ok(Self { child, stdout, spec, fps, index: 0 })
+        Ok(Self { child, stdout, spec, fps, index: 0, start_ms })
     }
 
     /// Frame tiếp theo kèm thời điểm (ms). `None` khi hết video.
@@ -75,7 +82,7 @@ impl FrameReader {
                 n => filled += n,
             }
         }
-        let t = (self.index as f64 * 1000.0 / self.fps).round() as u64;
+        let t = self.start_ms + (self.index as f64 * 1000.0 / self.fps).round() as u64;
         self.index += 1;
         Ok(Some((t, RgbImage::from_raw(self.spec.out_w, self.spec.out_h, buf).expect("kích thước frame"))))
     }
@@ -144,6 +151,29 @@ mod tests {
         assert_eq!(c.w, 1536);
         assert!(c.out_w <= 1280 && c.out_w % 2 == 0 && c.out_h % 2 == 0);
         assert!(CropSpec::new(1920, 1080, Some(Region { x: 0.5, y: 0.5, w: 0.001, h: 0.001 }), 1280).is_err());
+    }
+
+    /// Quét tiếp từ giữa video: frame đầu tiên mang đúng mốc `start_ms` và nội dung khớp thời điểm thật.
+    #[test]
+    fn reader_seeks_to_start_ms() {
+        let Ok(ff) = find_tool("ffmpeg") else { return };
+        let dir = std::env::temp_dir().join("glotalk_reader_seek");
+        std::fs::create_dir_all(&dir).unwrap();
+        let mp4 = dir.join("bw.mp4");
+        // 2s đen rồi 2s trắng.
+        let graph = "color=c=black:s=64x64:r=25:d=2[a];color=c=white:s=64x64:r=25:d=2[b];[a][b]concat=n=2:v=1:a=0";
+        let ok = Command::new(ff).args(["-v", "error", "-y", "-filter_complex", graph, "-pix_fmt", "yuv420p", mp4.to_str().unwrap()]).status().unwrap();
+        assert!(ok.success());
+        let spec = CropSpec::new(64, 64, None, 1280).unwrap();
+        let mut r = FrameReader::spawn(mp4.to_str().unwrap(), spec, 10.0, 1500).unwrap();
+        let mut frames = Vec::new();
+        while let Some((t, img)) = r.next_frame().unwrap() {
+            frames.push((t, img.get_pixel(32, 32)[0] > 128));
+        }
+        assert_eq!(frames[0].0, 1500);
+        assert!((24..=26).contains(&frames.len()), "{} frame", frames.len());
+        let first_white = frames.iter().find(|f| f.1).expect("có frame trắng").0;
+        assert!(first_white.abs_diff(2000) <= 100, "frame trắng đầu tiên ở {first_white}ms");
     }
 
     #[test]

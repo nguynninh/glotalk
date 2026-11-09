@@ -1,13 +1,14 @@
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
-import { api, formatTime, MediaInfo, OcrModel, OcrProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
+import { api, DEFAULT_SERVER, formatTime, MediaInfo, OcrModel, OcrPartial, OcrProgress, OcrSegment, settingsStore, SttProgress, Region, RenderAudio, RenderLayer, RenderProgress, VideoInfo } from "../lib/api";
 import { parseSrt, Segment, toSrt } from "../lib/srt";
-import { Clip, clipFx, Track, trackAudible } from "../lib/timeline";
+import { captionText, Clip, clipFx, Track, trackAudible, withCaptionTracks } from "../lib/timeline";
 import { drawCaption, drawText } from "../lib/graphics";
 import { SubStyle } from "../lib/subStyle";
 import { ColorGrade, gradeForExport } from "../lib/colorGrade";
-import { RegionKind, sequenceSize, timelineEnd, useEditor } from "./editor";
-import { t } from "../i18n";
+import { defaultTracks, OcrResume, RegionKind, sequenceSize, timelineEnd, useEditor } from "./editor";
+import { langName, t, TKey } from "../i18n";
+import { useSession } from "../lib/auth";
 
 const S = () => useEditor.getState();
 const dirOf = (p: string) => p.replace(/[\\/][^\\/]+$/, "");
@@ -72,16 +73,18 @@ interface ProjectFile {
   grade: ColorGrade;
   regions: Partial<Record<RegionKind, Region>>;
   uid: number;
+  ocrResume?: OcrResume | null;
 }
 let projectPath = "";
 
-export async function saveProject(saveAs = false) {
+/** Trả về false khi người dùng huỷ hộp thoại lưu hoặc ghi file lỗi. `quiet`: không ghi log khi lưu thành công (tự lưu). */
+export async function saveProject(saveAs = false, quiet = false): Promise<boolean> {
   const s = S();
   let file = projectPath;
   if (!file || saveAs) {
     const name = s.video ? `${baseName(s.video.path)}.glotalk` : "project.glotalk";
     const picked = await save({ defaultPath: s.outDir ? `${s.outDir}/${name}` : name, filters: [{ name: "Glotalk", extensions: ["glotalk"] }] });
-    if (!picked) return;
+    if (!picked) return false;
     file = picked;
   }
   const data: ProjectFile = {
@@ -95,42 +98,143 @@ export async function saveProject(saveAs = false) {
     grade: s.grade,
     regions: s.regions,
     uid: s.uid,
+    ocrResume: s.ocrResume,
   };
   try {
     await api.writeText(file, JSON.stringify(data, null, 1));
     projectPath = file;
-    S().log(t("act.projectSaved", { file }));
+    addRecentProject(file);
+    if (!quiet) S().log(t("act.projectSaved", { file }));
+    return true;
   } catch (e) {
     S().log(t("act.projectError", { err: String(e) }));
+    return false;
   }
 }
 
-export async function openProject() {
+/**
+ * Tạo dự án trống trong thư mục riêng `<nơi lưu>/<tên>/` (kèm `work/`, `export/`) và ghi ngay file `.glotalk`.
+ * Trả về true nếu đã tạo.
+ */
+export async function newProject(): Promise<boolean> {
+  const picked = await save({ title: t("project.newTitle"), defaultPath: t("project.defaultName") });
+  if (!picked) return false;
+  try {
+    const file = await api.createProject(picked.replace(/\.glotalk$/i, ""));
+    const dir = dirOf(file);
+    // Giữ log và trạng thái job đang chạy (OCR/STT/xuất tự kết thúc và cập nhật các trường này).
+    const { logs: _l, ocr: _o, stt: _s, render: _r, ...blank } = useEditor.getInitialState();
+    S().set({ ...blank, tracks: defaultTracks(), outDir: `${dir}/export`, workDir: `${dir}/work` });
+    projectPath = file;
+    S().log(t("act.projectCreated", { dir }));
+    await saveProject();
+    return true;
+  } catch (e) {
+    S().log(t("act.projectError", { err: String(e) }));
+    return false;
+  }
+}
+
+let autosaving = Promise.resolve();
+/** Tự lưu vào file dự án hiện tại (không hỏi nơi lưu, bỏ qua nếu chưa có file); các lần lưu xếp hàng để không ghi chồng nhau. */
+export function autosaveProject(): Promise<void> {
+  if (!projectPath) return autosaving;
+  autosaving = autosaving.then(() => saveProject(false, true).then(() => {}));
+  return autosaving;
+}
+
+/** Chờ job OCR kết thúc hẳn (đã nhận kết quả và cập nhật store). */
+function ocrStopped(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!S().ocr.running) return resolve();
+    const off = useEditor.subscribe((s) => {
+      if (s.ocr.running) return;
+      off();
+      resolve();
+    });
+  });
+}
+
+/**
+ * Rời dự án về màn Bắt đầu: lưu vào file dự án rồi dừng các job đang chạy.
+ * Chưa có file (vd. webview tải lại làm mất `projectPath`) mà đã có nội dung thì hỏi nơi lưu.
+ * Trả về false khi chưa lưu được (huỷ hộp thoại/lỗi ghi) — khi đó ở lại dự án để không mất dữ liệu.
+ */
+export async function closeProject(): Promise<boolean> {
+  // Dừng OCR trước để phần đã quét được giữ lại và lưu cùng dự án.
+  if (S().ocr.running) {
+    cancelOcr();
+    await ocrStopped();
+  }
+  const s = S();
+  const hasContent = !!s.video || s.assets.length > 0 || s.segments.length > 0;
+  if ((projectPath || hasContent) && !(await saveProject())) return false;
+  const { stt, render } = S();
+  if (stt.running) cancelStt();
+  if (render.running) cancelRender();
+  projectPath = "";
+  return true;
+}
+
+/** Mở dự án qua hộp thoại. Trả về true nếu đã mở. */
+export async function openProject(): Promise<boolean> {
   const file = await open({ filters: [{ name: "Glotalk", extensions: ["glotalk"] }] });
-  if (typeof file !== "string") return;
+  return typeof file === "string" ? openProjectFile(file) : false;
+}
+
+export async function openProjectFile(file: string): Promise<boolean> {
   try {
     const d = JSON.parse(await api.readText(file)) as ProjectFile;
     if (d.version !== 1) throw new Error(`version ${d.version}`);
+    // Dự án tạo bằng "Dự án mới" có `export/`, `work/`; file `.glotalk` cũ thì xuất cạnh file.
+    const dir = dirOf(file);
+    const [hasExport, hasWork] = await Promise.all([api.pathExists(`${dir}/export`), api.pathExists(`${dir}/work`)]);
     S().set({
       video: d.video,
       assets: d.assets.map((a) => ({ ...a, thumbs: [], peaks: [] })),
-      tracks: d.tracks,
+      tracks: withCaptionTracks(d.tracks),
       clips: d.clips,
       subStyle: d.subStyle,
       grade: d.grade,
       regions: d.regions ?? {},
       uid: d.uid,
+      ocrResume: d.ocrResume ?? null,
       selectedClipId: null,
       time: 0,
-      outDir: dirOf(file),
+      outDir: hasExport ? `${dir}/export` : dir,
+      workDir: hasWork ? `${dir}/work` : "",
     });
     S().setSegments(d.segments ?? []);
     projectPath = file;
+    addRecentProject(file);
     S().assets.forEach((a) => loadAssetData(a.id));
     S().log(t("act.projectOpened", { file }));
+    return true;
   } catch (e) {
     S().log(t("act.projectError", { err: String(e) }));
+    return false;
   }
+}
+
+const RECENT_KEY = "recentProjects";
+const RECENT_MAX = 10;
+
+/** Đường dẫn các file `.glotalk` mở/lưu gần đây, mới nhất trước. */
+export function recentProjects(): string[] {
+  try {
+    const v = JSON.parse(settingsStore.get(RECENT_KEY, "[]"));
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function addRecentProject(file: string) {
+  settingsStore.set(RECENT_KEY, JSON.stringify([file, ...recentProjects().filter((f) => f !== file)].slice(0, RECENT_MAX)));
+}
+
+export function removeRecentProject(file: string) {
+  settingsStore.set(RECENT_KEY, JSON.stringify(recentProjects().filter((f) => f !== file)));
 }
 
 export async function chooseOutDir() {
@@ -168,9 +272,9 @@ export async function exportSrt(field: "vi" | "src" | "both" = "vi") {
 }
 
 export async function extractAudioForStt() {
-  const { video, outDir } = S();
+  const { video, outDir, workDir } = S();
   if (!video) return S().log(t("act.noVideo"));
-  const out = `${outDir || dirOf(video.path)}/${baseName(video.path)}.16k.wav`;
+  const out = `${workDir || outDir || dirOf(video.path)}/${baseName(video.path)}.16k.wav`;
   S().log(t("act.extractingAudio"));
   try {
     await api.extractAudio(video.path, out);
@@ -180,26 +284,197 @@ export async function extractAudioForStt() {
   }
 }
 
+/** Nhận dạng giọng nói của video chính qua server; câu gốc → `src`, bản dịch → `vi`. */
+export async function runStt(opts: { sourceLanguage: string; targetLanguage: string }) {
+  const s = S();
+  const { video } = s;
+  if (!video) return s.log(t("act.noVideo"));
+  if (s.stt.running) return;
+  if (s.segments.length && !(await confirmDialog(t("act.confirmReplace", { n: s.segments.length })))) return;
+
+  const server = settingsStore.get("serverUrl", DEFAULT_SERVER);
+  s.set({ stt: { running: true, phase: "audio", doneS: 0, totalS: 0, lastText: "" } });
+  s.log(t("act.sttStart", { server }));
+  const unlisten = await listen<SttProgress>("stt-progress", (e) => {
+    const prev = S().stt;
+    S().set({ stt: { ...e.payload, running: true, lastText: e.payload.lastText || prev.lastText } });
+  });
+  try {
+    const out = await api.sttTranscribe({ server, path: video.path, ...opts });
+    for (const msg of out.warnings) S().log(t("act.sttWarning", { msg }));
+    // Người dùng có thể đã mở video khác trong lúc nhận dạng.
+    if (S().video?.path !== video.path) return;
+    S().setSegments(out.segments.map((x, i) => ({ id: i + 1, start: x.start, end: x.end, src: x.text, vi: x.translation })));
+    S().log(t("act.sttDone", { n: out.segments.length, audio: out.audioSeconds.toFixed(0), secs: out.seconds.toFixed(1) }));
+  } catch (e) {
+    S().log(t("act.sttStopped", { err: String(e) }));
+  } finally {
+    unlisten();
+    S().set({ stt: { ...S().stt, running: false, phase: "idle" } });
+  }
+}
+
+export function cancelStt() {
+  api.sttCancel().catch(() => {});
+}
+
+/**
+ * Hộp xác nhận của hệ điều hành. Không dùng `window.confirm`: webview macOS (wry) không cài hộp thoại JS
+ * nên nó trả false ngay, nút bấm như không có tác dụng.
+ */
+export const confirmDialog = (message: string) =>
+  ask(message, { kind: "warning", okLabel: t("dlg.ok"), cancelLabel: t("dlg.cancel") });
+
+/** Số câu mỗi lần gọi server: đủ nhỏ để tiến độ và nút Huỷ phản hồi nhanh (server nhận tối đa 50). */
+const TRANSLATE_BATCH = 10;
+/** Số câu gốc đứng trước lô gửi kèm làm ngữ cảnh, như server dùng giữa các câu trong lô. */
+const TRANSLATE_CONTEXT = 5;
+let translateCancelled = false;
+/** Đánh thức vòng dịch đang chờ OCR chốt thêm câu (để nút Huỷ có tác dụng ngay). */
+let wakeTranslate: (() => void) | null = null;
+
+/**
+ * Khoá nhận diện câu qua các lần OCR cập nhật danh sách (id bị đánh lại mỗi lần):
+ * câu đã chốt giữ nguyên mốc bắt đầu và chữ gốc.
+ */
+const segKey = (x: Segment) => `${x.start}|${x.src}`;
+
+/** Chờ danh sách câu đổi, OCR dừng hoặc người dùng bấm Huỷ. */
+function segmentsChanged(): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      off();
+      wakeTranslate = null;
+      resolve();
+    };
+    const off = useEditor.subscribe((s, p) => {
+      if (s.segments !== p.segments || !s.ocr.running) done();
+    });
+    wakeTranslate = done;
+  });
+}
+
+/**
+ * Dịch cột gốc sang `target` qua `POST /translate` của server, theo thứ tự thời gian, từng lô.
+ * `onlyEmpty` bỏ qua câu đã có bản dịch (giữ bản người dùng đã sửa). Câu lỗi giữ nguyên bản dịch cũ.
+ * Đang quét OCR thì dịch tiếp các câu mới chốt cho tới khi quét xong.
+ */
+export async function runTranslate(opts: { source: string; target: string; onlyEmpty: boolean }) {
+  const s = S();
+  if (s.translate.running) return;
+  const session = useSession.getState().session;
+  if (!session || session.guest || !session.token) return s.log(t("act.trGuest"));
+  const sent = new Set<string>();
+  const pending = () => S().segments.filter((x) => x.src.trim() && !sent.has(segKey(x)) && (!opts.onlyEmpty || !x.vi.trim()));
+  const first = pending();
+  if (!first.length && !s.ocr.running) return s.log(t("act.trNothing"));
+  const overwrite = first.filter((x) => x.vi.trim()).length;
+  if (overwrite && !(await confirmDialog(t("act.trConfirmOverwrite", { n: overwrite })))) return;
+
+  const server = settingsStore.get("serverUrl", DEFAULT_SERVER);
+  const video = s.video?.path;
+  const started = performance.now();
+  let done = 0;
+  let failed = 0;
+  translateCancelled = false;
+  s.set({ translate: { running: true, done: 0, total: first.length } });
+  s.log(t("act.trStart", { n: first.length, lang: langName(opts.target), server }));
+  try {
+    // Người dùng có thể đã mở video khác hoặc bấm Huỷ trong lúc chờ lô trước.
+    while (!translateCancelled && S().video?.path === video) {
+      const todo = pending();
+      if (!todo.length) {
+        if (!S().ocr.running) break;
+        await segmentsChanged();
+        continue;
+      }
+      const batch = todo.slice(0, TRANSLATE_BATCH);
+      batch.forEach((x) => sent.add(segKey(x)));
+      const all = S().segments.filter((x) => x.src.trim());
+      const at = Math.max(0, all.findIndex((x) => segKey(x) === segKey(batch[0])));
+      const context = all.slice(Math.max(0, at - TRANSLATE_CONTEXT), at).map((x) => x.src);
+      const out = await api.translateLines(server, session.token, opts.source, opts.target, batch.map((x) => x.src), context);
+      if (S().video?.path !== video) break;
+      batch.forEach((seg, j) => {
+        const r = out[j];
+        // Tìm lại theo khoá: trong lúc chờ server, OCR có thể đã thay danh sách và đánh lại id.
+        const cur = r?.text ? S().segments.find((x) => segKey(x) === segKey(seg)) : undefined;
+        if (cur) S().updateSegment(cur.id, { vi: r.text });
+        else if (!r?.text) {
+          if (!failed) S().log(t("act.trLineFailed", { err: r?.error ?? "?" }));
+          failed++;
+        }
+      });
+      done += batch.length;
+      S().set({ translate: { running: true, done, total: done + pending().length } });
+    }
+    const left = pending().length;
+    if (left) S().log(t("act.trCancelled", { done, total: done + left }));
+    else S().log(t("act.trDone", { n: done - failed, failed, secs: ((performance.now() - started) / 1000).toFixed(1) }));
+  } catch (e) {
+    const m = e instanceof Error ? e.message : String(e);
+    S().log(t("act.trStopped", { err: m === "tr.signIn" || m === "tr.noApi" ? t(m as TKey) : m }));
+  } finally {
+    S().set({ translate: { ...S().translate, running: false } });
+  }
+}
+
+export function cancelTranslate() {
+  translateCancelled = true;
+  wakeTranslate?.();
+}
+
 /** Vùng mặc định khi người dùng chưa khoanh: dải dưới của khung hình, nơi phụ đề thường nằm. */
 export const DEFAULT_SUB_REGION = { x: 0.05, y: 0.74, w: 0.9, h: 0.22 };
 
-export async function runOcr(opts: { scanFps: number; model: OcrModel; everyFrame: boolean; fullFrame: boolean }) {
+/**
+ * Quét phụ đề cứng. Câu đã chốt được đưa vào danh sách và tự lưu vào file dự án trong lúc quét;
+ * bị dừng (bấm Huỷ, đóng dự án, app lỗi) thì `resume` = true quét tiếp từ chỗ đã lưu với đúng tham số cũ.
+ */
+export async function runOcr(opts: { scanFps: number; model: OcrModel; everyFrame: boolean; fullFrame: boolean }, resume = false) {
   const s = S();
   const { video } = s;
   if (!video) return s.log(t("act.noVideo"));
   if (s.ocr.running) return;
-  let region = opts.fullFrame ? null : s.linkOcr ? s.regions.dialog : s.regions.ocr ?? s.regions.dialog;
-  if (!opts.fullFrame && !region) {
-    region = DEFAULT_SUB_REGION;
-    s.set({ regions: { ...s.regions, dialog: region } });
-    s.log(t("act.defaultRegion"));
+  const prev = s.ocrResume?.path === video.path ? s.ocrResume : null;
+  let job: OcrResume;
+  // Câu của các lần quét trước (giữ cả bản dịch người dùng đã sửa).
+  let keep: Segment[] = [];
+  if (resume && prev) {
+    job = prev;
+    keep = s.segments.filter((x) => x.start < prev.doneMs);
+    s.log(t("act.ocrResume", { time: formatTime(prev.doneMs) }));
+  } else {
+    let region = opts.fullFrame ? null : s.linkOcr ? s.regions.dialog : s.regions.ocr ?? s.regions.dialog;
+    if (!opts.fullFrame && !region) {
+      region = DEFAULT_SUB_REGION;
+      s.set({ regions: { ...s.regions, dialog: region } });
+      s.log(t("act.defaultRegion"));
+    }
+    if (s.segments.length && !(await confirmDialog(t("act.confirmReplace", { n: s.segments.length })))) return;
+    job = { path: video.path, doneMs: 0, region: region ?? null, scanFps: opts.scanFps, model: opts.model, everyFrame: opts.everyFrame };
+    s.log(t("act.ocrStart", { model: opts.model, fps: opts.scanFps, every: opts.everyFrame ? t("act.ocrEveryFrame") : "" }));
   }
-  if (s.segments.length && !window.confirm(t("act.confirmReplace", { n: s.segments.length }))) return;
+  // OcrSegment (Rust) → Segment của editor (srt.ts, dạng chuẩn ở frontend): chữ OCR là câu gốc, chưa có bản dịch.
+  // Giữ bản dịch đã có của câu đã chốt (người dùng có thể đang dịch trong lúc quét).
+  const withKept = (xs: OcrSegment[]): Segment[] => {
+    const vi = new Map(S().segments.filter((x) => x.vi).map((x) => [segKey(x), x.vi]));
+    return [...keep, ...xs.map((x) => ({ id: 0, start: x.start, end: x.end, src: x.text, vi: "" }))]
+      .map((x, i) => ({ ...x, id: i + 1, vi: x.vi || (vi.get(segKey(x)) ?? "") }));
+  };
+  const stillHere = () => S().video?.path === video.path;
 
-  s.set({ ocr: { running: true, phase: "model", done: 0, total: 0, ocrCalls: 0, lastText: "" } });
-  s.log(t("act.ocrStart", { model: opts.model, fps: opts.scanFps, every: opts.everyFrame ? t("act.ocrEveryFrame") : "" }));
+  s.set({ ocrResume: job, ocr: { running: true, phase: "model", done: 0, total: 0, ocrCalls: 0, lastText: "" } });
+  autosaveProject();
   const unlisten = await listen<OcrProgress>("ocr-progress", (e) => {
     S().set({ ocr: { ...e.payload, running: true } });
+  });
+  const unlistenPartial = await listen<OcrPartial>("ocr-partial", (e) => {
+    // Người dùng có thể đã mở video khác trong lúc quét.
+    if (!stillHere()) return;
+    S().setSegments(withKept(e.payload.segments));
+    S().set({ ocrResume: { ...job, doneMs: e.payload.doneMs } });
+    autosaveProject();
   });
   try {
     const out = await api.ocrExtract({
@@ -207,20 +482,28 @@ export async function runOcr(opts: { scanFps: number; model: OcrModel; everyFram
       width: video.width,
       height: video.height,
       durationMs: video.duration_ms,
-      region: region ?? null,
-      scanFps: opts.scanFps,
-      model: opts.model,
-      everyFrame: opts.everyFrame,
+      region: job.region,
+      scanFps: job.scanFps,
+      model: job.model,
+      everyFrame: job.everyFrame,
+      startMs: job.doneMs,
     });
-    // Người dùng có thể đã mở video khác trong lúc quét.
-    if (S().video?.path !== video.path) return;
-    // OcrSegment (Rust) → Segment của editor (srt.ts, dạng chuẩn ở frontend): chữ OCR là câu gốc, chưa có bản dịch.
-    S().setSegments(out.segments.map((x, i) => ({ id: i + 1, start: x.start, end: x.end, src: x.text, vi: "" })));
-    S().log(t("act.ocrDone", { n: out.segments.length, frames: out.frames, calls: out.ocrCalls, secs: out.seconds.toFixed(1) }));
+    if (!stillHere()) return;
+    const segs = withKept(out.segments);
+    S().setSegments(segs);
+    if (out.complete) {
+      S().set({ ocrResume: null });
+      S().log(t("act.ocrDone", { n: segs.length, frames: out.frames, calls: out.ocrCalls, secs: out.seconds.toFixed(1) }));
+    } else {
+      S().set({ ocrResume: { ...job, doneMs: out.doneMs } });
+      S().log(t("act.ocrPaused", { time: formatTime(out.doneMs), n: segs.length }));
+    }
+    await autosaveProject();
   } catch (e) {
     S().log(t("act.ocrStopped", { err: String(e) }));
   } finally {
     unlisten();
+    unlistenPartial();
     S().set({ ocr: { ...S().ocr, running: false, phase: "idle" } });
   }
 }
@@ -283,7 +566,7 @@ export async function exportVideo(opts: { res: ExportRes; encoder: string }) {
     const a = c.assetId ? assets.get(c.assetId) : undefined;
     if (!tk || tk.kind !== "audio" || !a || !trackAudible(s.tracks, tk)) continue;
     const volume = tk.gain * clipFx(c).volume;
-    if (volume > 0) audio.push({ path: a.path, startMs: c.start, durMs: c.dur, inMs: c.in, volume });
+    if (volume > 0) audio.push({ path: a.path, startMs: c.start, durMs: c.dur, inMs: c.in, volume, volumeL: tk.gainL ?? 1, volumeR: tk.gainR ?? 1 });
   }
 
   let unlisten: (() => void) | undefined;
@@ -308,7 +591,7 @@ export function cancelRender() {
 }
 
 /**
- * Chữ (track Text) và phụ đề (C1) thành chuỗi PNG trong suốt, mỗi ảnh ứng với một khoảng thời gian không đổi nội dung,
+ * Chữ (track Text) và phụ đề (câu gốc / bản dịch) thành chuỗi PNG trong suốt, mỗi ảnh ứng với một khoảng thời gian không đổi nội dung,
  * kèm file ffconcat ghi thời lượng từng ảnh. Không có chữ nào thì trả về null.
  */
 async function renderGraphics(W: number, H: number, k: number, durationMs: number): Promise<string | null> {
@@ -322,10 +605,9 @@ async function renderGraphics(W: number, H: number, k: number, durationMs: numbe
       items.push({ start: c.start, end: c.start + c.dur, draw: (g) => drawText(g, { text: c.text!, ...fx }, W, H, k) });
     }
   }
-  const capTrack = s.tracks.find((x) => x.kind === "caption");
-  if (s.subStyle.enabled && !capTrack?.hidden)
+  if (s.subStyle.enabled)
     for (const seg of s.segments) {
-      const text = seg.vi || seg.src;
+      const text = captionText(s.tracks, seg);
       if (text) items.push({ start: seg.start, end: seg.end, draw: (g) => drawCaption(g, text, s.subStyle, W, H, k) });
     }
   if (!items.length) return null;

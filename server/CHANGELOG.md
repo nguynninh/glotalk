@@ -11,6 +11,18 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 
 ### Added
 
+- Subtitle translation for the editor on the HTTP port: `POST /translate` with
+  `Authorization: Bearer` (an editor sign-in token) and
+  `{"source","target","texts":[..],"context":[..]}` -> `{"translations":[{"text"} |
+  {"error"}]}`. Up to 50 lines per request, each sent to the translation router in
+  `context` mode with the five previous lines; a failed line does not fail the request.
+  The public tunnel must also send `^/translate` to `127.0.0.1:8767`.
+- Editor sign-in on the HTTP port (`127.0.0.1:8767`): `POST /auth/login`
+  (`{"user","password"}` -> token valid 30 days), `GET /auth/me` and
+  `POST /auth/logout` with `Authorization: Bearer`. Accounts are Argon2id hashes in
+  `ONPLAY_AUTH_USERS` (default `auth-users`), added with `scripts/prod/auth-user.sh`
+  (`onplay-server --hash-password`); sessions are kept in memory, and a name is locked
+  for 10 minutes after 5 failures. The port is now opened even when dubbing is off.
 - Dub jobs for the iOS app (phase 1 of `docs/video-dubbing-design.md`): a WebSocket
   connection whose first message has a `type` sends `dub`, `job`, `cancel`, `delete`
   or `list` (protocol version 1, structured error codes). A link is dubbed by a

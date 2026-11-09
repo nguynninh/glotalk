@@ -11,8 +11,10 @@
 //!
 //! A connection whose first message has a `type` is a dub job connection instead
 //! ([`jobs`], `docs/video-dubbing-design.md`); job results are served over HTTP by
-//! [`downloads`] on `127.0.0.1:8767`.
+//! [`downloads`] on `127.0.0.1:8767`, which also answers editor sign-in ([`auth`]) and
+//! subtitle translation (`POST /translate`).
 
+pub mod auth;
 pub mod config;
 pub mod downloads;
 pub mod engine_slots;
@@ -32,6 +34,7 @@ pub mod translation;
 use std::net::TcpListener;
 use std::sync::Arc;
 
+use auth::Auth;
 use jobs::Jobs;
 
 pub use config::Config;
@@ -55,6 +58,8 @@ pub struct Services {
     pub recognition: Vec<RecognitionWorker>,
     /// Dub jobs; [`Jobs::disabled`] says why they are refused.
     pub jobs: Arc<Jobs>,
+    /// Editor accounts and sign-in sessions.
+    pub auth: Arc<Auth>,
     /// Receives connection events.
     pub observer: Arc<dyn Observer>,
 }
@@ -69,7 +74,8 @@ impl Services {
         let recognition = (0..slots.count()).map(|_| RecognitionWorker::start()).collect();
         let observer: Arc<dyn Observer> = Arc::new(observer);
         let jobs = Jobs::start(&config, observer.clone());
-        Self { config, translator, speech: Arc::new(Speech::new()), slots, context_passes, recognition, jobs, observer }
+        let auth = Arc::new(Auth::new(&config.auth_users));
+        Self { config, translator, speech: Arc::new(Speech::new()), slots, context_passes, recognition, jobs, auth, observer }
     }
 
     /// Loads the streaming engine for `threads` and `low_latency` on the first worker in the
@@ -90,16 +96,17 @@ pub fn bind(config: &Config) -> std::io::Result<TcpListener> {
 }
 
 /// Accepts connections on `listener` (from [`bind`]) until it fails. With `downloads` (from
-/// [`bind_downloads`]) and dubbing on, also serves job results there.
+/// [`bind_downloads`]), also serves job results (when dubbing is on), sign-in and subtitle
+/// translation there.
 pub fn serve(services: Services, listener: TcpListener, downloads: Option<tiny_http::Server>) -> std::io::Result<()> {
-    if let Some(server) = downloads.filter(|_| services.jobs.disabled().is_none()) {
-        let jobs = services.jobs.clone();
-        std::thread::spawn(move || downloads::serve(&jobs, server));
+    if let Some(server) = downloads {
+        let (jobs, auth, translator) = (services.jobs.clone(), services.auth.clone(), services.translator.clone());
+        std::thread::spawn(move || downloads::serve(&jobs, &auth, &translator, server));
     }
     socket::serve(Arc::new(services), listener)
 }
 
-/// Opens the job download port.
+/// Opens the HTTP port for job downloads, sign-in and subtitle translation.
 pub fn bind_downloads(config: &Config) -> std::io::Result<tiny_http::Server> {
     tiny_http::Server::http(&config.download_address).map_err(std::io::Error::other)
 }

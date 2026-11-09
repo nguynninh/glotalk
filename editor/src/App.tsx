@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { TimelineTool, timelineEnd, useEditor } from "./store/editor";
-import { addMediaFiles, exportSrt, importMedia, importSrt, importSrtFile, MEDIA_EXTS, openProject, saveProject } from "./store/actions";
+import { addMediaFiles, closeProject, exportSrt, importMedia, importSrt, importSrtFile, MEDIA_EXTS, newProject, openProject, saveProject } from "./store/actions";
+import "./store/autosave";
 import { Splitter } from "./components/Panel";
 import { InspectorPanel } from "./panels/InspectorPanel";
 import { MonitorPanel } from "./panels/MonitorPanel";
@@ -11,6 +13,10 @@ import { SettingsTab } from "./tabs/SettingsTab";
 import { TitlebarPrefs } from "./components/TitlebarPrefs";
 import { LANGS, t, useLang, useT } from "./i18n";
 import { useTheme } from "./lib/theme";
+import { Splash } from "./screens/Splash";
+import { Welcome } from "./screens/Welcome";
+import { Login } from "./screens/Login";
+import { logout, rememberSession, restoreSession, useSession } from "./lib/auth";
 import "./App.css";
 
 type Workspace = "edit" | "settings";
@@ -34,7 +40,30 @@ const saveNum = (k: string, v: number) => {
   }
 };
 
+/** Mở app: màn hình chờ → đăng nhập (bỏ qua nếu phiên ghi nhớ còn hiệu lực) → màn hình bắt đầu (tạo/mở dự án) → trình biên tập. */
 export default function App() {
+  const [screen, setScreen] = useState<"splash" | "login" | "welcome" | "editor">("splash");
+  const session = useSession((s) => s.session);
+  const setSession = useSession((s) => s.setSession);
+  const loadSession = useCallback(async () => {
+    const s = await restoreSession();
+    if (!s) rememberSession(null);
+    setSession(s);
+  }, [setSession]);
+  const afterSplash = useCallback(() => setScreen(useSession.getState().session ? "welcome" : "login"), []);
+  const signOut = () => {
+    logout(session);
+    setSession(null);
+    setScreen("login");
+  };
+  const goHome = useCallback(() => setScreen("welcome"), []);
+  if (screen === "splash") return <Splash onDone={afterSplash} work={loadSession} />;
+  if (screen === "login") return <Login onLogin={(s) => { setSession(s); setScreen("welcome"); }} />;
+  if (screen === "welcome") return <Welcome onOpen={() => setScreen("editor")} onLogout={signOut} />;
+  return <Editor onHome={goHome} />;
+}
+
+function Editor({ onHome }: { onHome: () => void }) {
   const [ws, setWs] = useState<Workspace>("edit");
   const [leftW, setLeftW] = useState(() => loadNum("projectW", 280));
   const [rightW, setRightW] = useState(() => loadNum("inspectorW", 340));
@@ -52,6 +81,7 @@ export default function App() {
   useEffect(() => { saveNum("topH", topH); }, [topH]);
   useShortcuts(ws === "edit");
   useFileDrop(ws === "edit");
+  useCloseToHome(onHome);
 
   const prefs = (
     <TitlebarPrefs
@@ -78,16 +108,9 @@ export default function App() {
         </div>
       ) : null}
       <header className="topbar">
-        <div className="brand"><span className="logo">G</span>Glotalk <b>Editor</b></div>
+        <div className="brand"><img className="logo" src="/logo.png" alt="" />Glotalk <b>Editor</b></div>
         <nav className="menu">
-          <button onClick={openProject}>{t("menu.openProject")}</button>
-          <button onClick={() => saveProject()} title={t("menu.saveProjectTitle")}>{t("menu.saveProject")}</button>
-          <button onClick={importMedia}>{t("menu.importVideo")}</button>
-          <button onClick={importSrt}>{t("menu.importSrt")}</button>
-          <button onClick={() => exportSrt("vi")}>{t("menu.exportSrt")}</button>
-        </nav>
-        <nav className="workspaces">
-          <button className={ws === "edit" ? "on" : ""} onClick={() => setWs("edit")}>{t("ws.edit")}</button>
+          <FileMenu />
         </nav>
         <span className="grow" />
         <span className="title muted">{video ? video.path.replace(/^.*[\\/]/, "") : t("top.noProject")}</span>
@@ -127,7 +150,69 @@ export default function App() {
   );
 }
 
+/** Menu "Tệp" trên topbar: gom các thao tác dự án / nhập / xuất. Đóng khi chọn mục, bấm ra ngoài hoặc Esc. */
+function FileMenu() {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+  const run = (fn: () => unknown) => () => {
+    setOpen(false);
+    fn();
+  };
+  return (
+    <div className="menu-drop" ref={ref}>
+      <button className={open ? "on" : ""} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        {t("menu.file")}
+      </button>
+      {open ? (
+        <div className="ctx-menu" role="menu">
+          <button role="menuitem" onClick={run(newProject)}>{t("menu.newProject")}</button>
+          <button role="menuitem" onClick={run(openProject)}>{t("menu.openProject")}<kbd>⌘O</kbd></button>
+          <button role="menuitem" onClick={run(() => saveProject())} title={t("menu.saveProjectTitle")}>{t("menu.saveProject")}<kbd>⌘S</kbd></button>
+          <hr />
+          <button role="menuitem" onClick={run(importMedia)}>{t("menu.importVideo")}</button>
+          <button role="menuitem" onClick={run(importSrt)}>{t("menu.importSrt")}</button>
+          <hr />
+          <button role="menuitem" onClick={run(() => exportSrt("vi"))}>{t("menu.exportSrt")}</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** Phím tắt kiểu NLE. Bỏ qua khi đang gõ trong ô nhập. */
+/** Ở màn dự án, nút đóng cửa sổ (×) đưa về màn Bắt đầu thay vì thoát app; ở các màn khác đóng như thường. */
+function useCloseToHome(onHome: () => void) {
+  useEffect(() => {
+    let leaving = false;
+    const off = getCurrentWindow().onCloseRequested(async (e) => {
+      e.preventDefault();
+      if (leaving) return;
+      leaving = true;
+      if (await closeProject()) onHome();
+      else leaving = false;
+    });
+    return () => {
+      off.then((fn) => fn());
+    };
+  }, [onHome]);
+}
+
 function useShortcuts(active: boolean) {
   useEffect(() => {
     if (!active) return;

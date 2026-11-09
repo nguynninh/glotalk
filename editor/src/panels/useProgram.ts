@@ -92,9 +92,32 @@ export function useProgram(
       el.src = convertFileSrc(asset.path);
       return el;
     };
+    // Âm lượng riêng L/R cần Web Audio. Chỉ nối thẻ <audio> vào khi track có chỉnh L/R (một khi đã nối thì không gỡ ra
+    // được), còn lại vẫn phát thẳng như cũ. Khi đã nối, mọi âm lượng đặt ở nút gain, thẻ <audio> để volume = 1.
+    let actx: AudioContext | null = null;
+    const routes = new Map<string, { src: MediaElementAudioSourceNode; l: GainNode; r: GainNode }>();
+    const route = (id: string, el: HTMLAudioElement) => {
+      let rt = routes.get(id);
+      if (rt) return rt;
+      actx ??= new AudioContext();
+      // Ép về 2 kênh trước khi tách để file mono cũng có cả tai phải.
+      const up = new GainNode(actx, { channelCount: 2, channelCountMode: "explicit", channelInterpretation: "speakers" });
+      const split = actx.createChannelSplitter(2);
+      const merge = actx.createChannelMerger(2);
+      rt = { src: actx.createMediaElementSource(el), l: actx.createGain(), r: actx.createGain() };
+      rt.src.connect(up).connect(split);
+      split.connect(rt.l, 0).connect(merge, 0, 0);
+      split.connect(rt.r, 1).connect(merge, 0, 1);
+      merge.connect(actx.destination);
+      routes.set(id, rt);
+      return rt;
+    };
+
     const drop = (id: string) => {
       const el = media.get(id);
       if (!el) return;
+      routes.get(id)?.src.disconnect();
+      routes.delete(id);
       if (!(el instanceof HTMLImageElement)) {
         el.pause();
         el.removeAttribute("src");
@@ -167,7 +190,15 @@ export function useProgram(
         const target = active ? (now - c.start + c.in) / 1000 : c.in / 1000;
         if (el instanceof HTMLAudioElement) {
           const fx = clipFx(c);
-          el.volume = s.mix.masterMuted || !trackAudible(s.tracks, tk) ? 0 : Math.min(1, s.mix.master * tk.gain * fx.volume);
+          const vol = s.mix.masterMuted || !trackAudible(s.tracks, tk) ? 0 : Math.min(1, s.mix.master * tk.gain * fx.volume);
+          const [gl, gr] = [tk.gainL ?? 1, tk.gainR ?? 1];
+          if (routes.has(c.id) || gl !== 1 || gr !== 1) {
+            const rt = route(c.id, el);
+            el.volume = 1;
+            rt.l.gain.value = vol * gl;
+            rt.r.gain.value = vol * gr;
+            if (s.playing && actx!.state === "suspended") actx!.resume().catch(() => {});
+          } else el.volume = vol;
         }
         if (active && s.playing) {
           const drift = el.currentTime - target;
@@ -250,6 +281,7 @@ export function useProgram(
       cancelAnimationFrame(raf);
       unsub();
       for (const id of [...media.keys()]) drop(id);
+      actx?.close().catch(() => {});
       comp.dispose();
       compRef.current = null;
     };

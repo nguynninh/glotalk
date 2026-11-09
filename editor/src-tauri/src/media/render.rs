@@ -49,6 +49,15 @@ pub struct AudioClip {
     pub in_ms: u64,
     /// Âm lượng cuối cùng (track × clip)
     pub volume: f64,
+    /// Âm lượng riêng kênh trái/phải của track, nhân thêm sau `volume`
+    #[serde(default = "unity")]
+    pub volume_l: f64,
+    #[serde(default = "unity")]
+    pub volume_r: f64,
+}
+
+fn unity() -> f64 {
+    1.0
 }
 
 /// Chỉnh màu toàn khung, tương đương preview: nhân kênh R/G/B (cân bằng trắng + phơi sáng), rồi tương phản, bão hoà.
@@ -184,8 +193,14 @@ pub fn build_args(job: &RenderJob) -> AppResult<Vec<String>> {
     n += 1;
     for (k, c) in job.audio.iter().enumerate() {
         input(vec!["-ss".into(), secs(c.in_ms), "-t".into(), secs(c.dur_ms), "-i".into(), c.path.clone()], &mut a);
+        // Nguồn mono đã thành stereo sau aformat nên pan tách được hai tai.
+        let pan = if c.volume_l != 1.0 || c.volume_r != 1.0 {
+            format!(",pan=stereo|c0={:.4}*c0|c1={:.4}*c1", c.volume_l.max(0.0), c.volume_r.max(0.0))
+        } else {
+            String::new()
+        };
         f.push(format!(
-            "[{n}:a]aresample=48000,aformat=channel_layouts=stereo,volume={:.4},adelay={}:all=1[a{k}]",
+            "[{n}:a]aresample=48000,aformat=channel_layouts=stereo,volume={:.4}{pan},adelay={}:all=1[a{k}]",
             c.volume.max(0.0),
             c.start_ms
         ));
@@ -339,7 +354,7 @@ mod tests {
         let mut g = layer(green.to_str().unwrap());
         g.key = Some(KeySpec { color: "#00ff00".into(), similarity: 0.1, blend: 0.02, spill: 0.2 });
         j.layers = vec![bg, g];
-        j.audio = vec![AudioClip { path: tone.to_str().unwrap().into(), start_ms: 500, dur_ms: 1500, in_ms: 0, volume: 0.8 }];
+        j.audio = vec![AudioClip { path: tone.to_str().unwrap().into(), start_ms: 500, dur_ms: 1500, in_ms: 0, volume: 0.8, volume_l: 1.0, volume_r: 0.5 }];
         let cancel = AtomicBool::new(false);
         let mut seen = 0;
         run(&j, &cancel, |_| seen += 1).expect("render");

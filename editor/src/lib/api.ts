@@ -1,5 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/** `auth::Login` bên Rust (camelCase). */
+export interface AuthLogin {
+  token: string;
+  user: string;
+  /** Giây Unix. */
+  expiresAt: number;
+}
+
 export interface ToolStatus {
   ffmpeg: string | null;
   ffprobe: string | null;
@@ -46,6 +54,8 @@ export interface OcrJob {
   scanFps: number;
   model: OcrModel;
   everyFrame: boolean;
+  /** Quét tiếp từ mốc này (ms) */
+  startMs: number;
 }
 
 export interface OcrSegment {
@@ -60,10 +70,20 @@ export interface OcrOutput {
   frames: number;
   ocrCalls: number;
   seconds: number;
+  /** false khi bị dừng giữa chừng: `segments` là phần đã chốt, quét tiếp từ `doneMs` */
+  complete: boolean;
+  doneMs: number;
+}
+
+/** Sự kiện "ocr-partial": các câu đã chốt của lần chạy này và mốc đã quét chắc chắn. */
+export interface OcrPartial {
+  segments: OcrSegment[];
+  doneMs: number;
 }
 
 export interface OcrProgress {
-  phase: "model" | "ocr" | "done";
+  /** "download": done/total là byte model đã tải/tổng */
+  phase: "download" | "model" | "ocr" | "done";
   done: number;
   total: number;
   ocrCalls: number;
@@ -91,6 +111,8 @@ export interface RenderAudio {
   durMs: number;
   inMs: number;
   volume: number;
+  volumeL: number;
+  volumeR: number;
 }
 export interface RenderJob {
   output: string;
@@ -109,6 +131,38 @@ export interface RenderProgress {
   totalMs: number;
 }
 
+/** Khớp `stt::SttJob`/`SttOutput`/`SttProgress` (camelCase); `SttSegment` giữ tên trường Rust. */
+export interface SttJob {
+  server: string;
+  path: string;
+  sourceLanguage: string;
+  /** Rỗng: không dịch */
+  targetLanguage: string;
+}
+export interface SttSegment {
+  start: number;
+  end: number;
+  text: string;
+  translation: string;
+}
+export interface SttOutput {
+  segments: SttSegment[];
+  audioSeconds: number;
+  seconds: number;
+  warnings: string[];
+}
+export interface SttProgress {
+  phase: "audio" | "connect" | "stt";
+  doneS: number;
+  totalS: number;
+  lastText: string;
+}
+
+/** Server công khai (onplay-server); đổi trong Cài đặt. */
+export const DEFAULT_SERVER = "https://stt.qiverse.top";
+/** Ngôn ngữ server nhận dạng/dịch được (`server/docs/streaming-audio.md`). */
+export const STT_LANGUAGES = ["vi", "en", "zh", "ja", "ko", "th", "id", "ru", "ar", "fr", "de", "es"] as const;
+
 export const api = {
   checkTools: () => invoke<ToolStatus>("check_tools"),
   probeVideo: (path: string) => invoke<VideoInfo>("probe_video", { path }),
@@ -125,8 +179,21 @@ export const api = {
   overlayWrite: (name: string, bytes: Uint8Array) => invoke<void>("overlay_write", bytes, { headers: { "x-name": name } }),
   renderVideo: (job: RenderJob) => invoke<string>("render_video", { job }),
   renderCancel: () => invoke<void>("render_cancel"),
+  sttCheck: (server: string) => invoke<string>("stt_check", { server }),
+  sttTranscribe: (job: SttJob) => invoke<SttOutput>("stt_transcribe", { job }),
+  sttCancel: () => invoke<void>("stt_cancel"),
   readText: (path: string) => invoke<string>("read_text", { path }),
   writeText: (path: string, content: string) => invoke<void>("write_text", { path, content }),
+  /** Tạo thư mục dự án (kèm `work/`, `export/`), trả về đường dẫn file `.glotalk` bên trong. */
+  createProject: (dir: string) => invoke<string>("create_project", { dir }),
+  pathExists: (path: string) => invoke<boolean>("path_exists", { path }),
+  authLogin: (server: string, user: string, password: string) => invoke<AuthLogin>("auth_login", { server, user, password }),
+  /** Tên tài khoản nếu token còn hiệu lực, null nếu server từ chối. */
+  authMe: (server: string, token: string) => invoke<string | null>("auth_me", { server, token }),
+  authLogout: (server: string, token: string) => invoke<void>("auth_logout", { server, token }),
+  /** Một lô câu qua `POST /translate` của server; mỗi phần tử là `text` hoặc `error` của riêng câu đó. */
+  translateLines: (server: string, token: string, source: string, target: string, texts: string[], context: string[]) =>
+    invoke<{ text?: string; error?: string }[]>("translate_lines", { server, token, source, target, texts, context }),
 };
 
 /** Timecode kiểu NLE: HH:MM:SS:FF */

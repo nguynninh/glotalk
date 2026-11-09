@@ -3,6 +3,7 @@ use crate::error::AppResult;
 use crate::media::ffmpeg::{self, MediaInfo, ToolStatus, VideoInfo};
 use crate::media::render;
 use crate::ocr::{self, engine::OcrEngine, OcrJob, OcrOutput, OcrProgress};
+use crate::stt::{self, SttJob, SttOutput};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{Emitter, State};
@@ -59,6 +60,50 @@ pub fn write_text(path: String, content: String) -> AppResult<()> {
     Ok(std::fs::write(path, content)?)
 }
 
+/// Tạo thư mục dự án mới, trả về đường dẫn file `.glotalk` bên trong.
+#[tauri::command]
+pub fn create_project(dir: String) -> AppResult<String> {
+    Ok(crate::project::create_project_dir(std::path::Path::new(&dir))?.to_string_lossy().into_owned())
+}
+
+#[tauri::command]
+pub fn path_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
+
+// ===== Đăng nhập =====
+
+fn joined<T>(r: Result<AppResult<T>, tauri::Error>) -> AppResult<T> {
+    r.map_err(|e| crate::error::AppError::Other(e.to_string()))?
+}
+
+#[tauri::command]
+pub async fn auth_login(server: String, user: String, password: String) -> AppResult<crate::auth::Login> {
+    joined(tauri::async_runtime::spawn_blocking(move || crate::auth::login(&server, &user, &password)).await)
+}
+
+#[tauri::command]
+pub async fn auth_me(server: String, token: String) -> AppResult<Option<String>> {
+    joined(tauri::async_runtime::spawn_blocking(move || crate::auth::me(&server, &token)).await)
+}
+
+#[tauri::command]
+pub async fn translate_lines(
+    server: String,
+    token: String,
+    source: String,
+    target: String,
+    texts: Vec<String>,
+    context: Vec<String>,
+) -> AppResult<Vec<crate::auth::Translated>> {
+    joined(tauri::async_runtime::spawn_blocking(move || crate::auth::translate(&server, &token, &source, &target, &texts, &context)).await)
+}
+
+#[tauri::command]
+pub async fn auth_logout(server: String, token: String) -> AppResult<()> {
+    joined(tauri::async_runtime::spawn_blocking(move || crate::auth::logout(&server, &token)).await)
+}
+
 // ===== OCR =====
 
 /// Engine OCR được giữ lại giữa các lần chạy (nạp model mất vài giây).
@@ -71,8 +116,11 @@ pub struct OcrState {
 
 #[tauri::command]
 pub async fn ocr_extract(app: tauri::AppHandle, state: State<'_, OcrState>, job: OcrJob) -> AppResult<OcrOutput> {
-    if state.running.swap(true, Ordering::SeqCst) {
-        return Err(crate::error::AppError::Other("OCR đang chạy.".into()));
+    // Webview tải lại (vd. HMR) thì mất trạng thái nhưng job cũ vẫn chạy và không còn ai nhận kết quả:
+    // dừng job đó rồi chạy job mới, thay vì báo lỗi khiến nút "Tiếp tục quét" như không có tác dụng.
+    while state.running.swap(true, Ordering::SeqCst) {
+        state.cancel.store(true, Ordering::SeqCst);
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
     state.cancel.store(false, Ordering::SeqCst);
     let cached = state.engine.lock().expect("ocr lock").clone().filter(|e| e.size == job.model);
@@ -81,13 +129,24 @@ pub async fn ocr_extract(app: tauri::AppHandle, state: State<'_, OcrState>, job:
         let engine = match cached {
             Some(e) => e,
             None => {
+                ocr::engine::ensure_models(job.model, &cancel, |done, total| {
+                    let _ = app.emit("ocr-progress", OcrProgress { phase: "download", done, total, ocr_calls: 0, last_text: String::new() });
+                })?;
                 let _ = app.emit("ocr-progress", OcrProgress { phase: "model", done: 0, total: 0, ocr_calls: 0, last_text: String::new() });
                 Arc::new(OcrEngine::new(job.model)?)
             }
         };
-        let out = ocr::run(&engine, &job, &cancel, |p| {
-            let _ = app.emit("ocr-progress", p);
-        })?;
+        let out = ocr::run(
+            &engine,
+            &job,
+            &cancel,
+            |p| {
+                let _ = app.emit("ocr-progress", p);
+            },
+            |p| {
+                let _ = app.emit("ocr-partial", p);
+            },
+        )?;
         Ok((engine, out))
     })
     .await
@@ -160,5 +219,45 @@ pub async fn render_video(app: tauri::AppHandle, state: State<'_, RenderState>, 
 
 #[tauri::command]
 pub fn render_cancel(state: State<'_, RenderState>) {
+    state.cancel.store(true, Ordering::SeqCst);
+}
+
+// ===== STT qua server =====
+
+/// Chỉ một phiên nhận dạng một lúc; huỷ được.
+#[derive(Default)]
+pub struct SttState {
+    cancel: Arc<AtomicBool>,
+    running: AtomicBool,
+}
+
+#[tauri::command]
+pub async fn stt_check(server: String) -> AppResult<String> {
+    stt::check(&server).await
+}
+
+#[tauri::command]
+pub async fn stt_transcribe(app: tauri::AppHandle, state: State<'_, SttState>, job: SttJob) -> AppResult<SttOutput> {
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err(crate::error::AppError::Other("Nhận dạng giọng nói đang chạy.".into()));
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+    let last = Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1));
+    let result = stt::transcribe(job, state.cancel.clone(), |p| {
+        // Tiến độ tối đa 5 lần/giây; câu mới chốt luôn được gửi.
+        let mut at = last.lock().expect("stt lock");
+        if p.last_text.is_empty() && at.elapsed().as_millis() < 200 {
+            return;
+        }
+        *at = std::time::Instant::now();
+        let _ = app.emit("stt-progress", p);
+    })
+    .await;
+    state.running.store(false, Ordering::SeqCst);
+    result
+}
+
+#[tauri::command]
+pub fn stt_cancel(state: State<'_, SttState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }

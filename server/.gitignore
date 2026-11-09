@@ -12,6 +12,7 @@ AGENTS.md
 sessions/
 /jobs/
 /dub-tokens
+/auth-users
 dist/
 rust/target/
 

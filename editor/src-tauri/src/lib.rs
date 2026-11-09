@@ -1,8 +1,10 @@
+mod auth;
 mod commands;
 mod error;
 mod media;
 pub mod ocr;
 pub mod project;
+mod stt;
 
 use tauri::Manager;
 
@@ -33,6 +35,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .manage(commands::OcrState::default())
         .manage(commands::RenderState::default())
+        .manage(commands::SttState::default())
         .setup(|app| {
             if let Err(e) = prepare_models(app) {
                 eprintln!("Không chuẩn bị được model OCR: {e}");
@@ -48,12 +51,21 @@ pub fn run() {
             commands::thumbnails,
             commands::read_text,
             commands::write_text,
+            commands::create_project,
+            commands::path_exists,
+            commands::auth_login,
+            commands::auth_me,
+            commands::auth_logout,
+            commands::translate_lines,
             commands::ocr_extract,
             commands::ocr_cancel,
             commands::overlay_begin,
             commands::overlay_write,
             commands::render_video,
             commands::render_cancel,
+            commands::stt_check,
+            commands::stt_transcribe,
+            commands::stt_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

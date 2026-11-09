@@ -37,6 +37,8 @@ onplay-stt = { path = "crates/onplay-stt" }
 onplay-server = { path = "crates/onplay-server" }
 onplay-translation = { path = "crates/onplay-translation" }
 onplay-translation-bench = { path = "crates/onplay-translation-bench" }
+# Editor account passwords (Argon2id PHC strings).
+argon2 = "0.5.3"
 base64 = "0.22.1"
 bindgen = "0.72.0"
 # Qwen3 context translation; Metal on Apple Silicon.

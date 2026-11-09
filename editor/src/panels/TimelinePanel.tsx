@@ -2,8 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { formatTimecode } from "../lib/api";
 import { Segment } from "../lib/srt";
-import { Clip, clipEnd, clipFx, displayOrder, fits, MediaAsset, MIN_CLIP_MS, Track, trackAudible, trackCode } from "../lib/timeline";
+import { Clip, clipEnd, clipFx, displayOrder, fits, MediaAsset, MIN_CLIP_MS, Track, trackAudible, trackCode, trackHidden } from "../lib/timeline";
 import { timelineEnd, useEditor } from "../store/editor";
+import { confirmDialog } from "../store/actions";
 import { useT } from "../i18n";
 import { useTheme } from "../lib/theme";
 import { IconCursor, IconEye, IconHand, IconLink, IconLock, IconMagnet, IconPen, IconRazor, IconRipple, IconScissors, IconSlip, IconTrackFwd, IconTrash, IconType } from "../components/icons";
@@ -13,6 +14,10 @@ import type { TKey } from "../i18n";
 const HEAD_W = 200;
 const RULER_H = 26;
 const TRACK_H: Record<Track["kind"], number> = { video: 76, caption: 46, audio: 64, text: 40 };
+/** Track âm thanh kéo cao được tới mức này; từ AUDIO_LR_H trở lên thì hiện thêm âm lượng tai trái/phải. */
+const AUDIO_MAX_H = 200;
+const AUDIO_LR_H = 104;
+const trackH = (tk: Track) => tk.height ?? TRACK_H[tk.kind];
 /** Màu clip theo thứ tự track âm thanh, kiểu nhãn màu của Premiere (lời, hiệu ứng, nền, nhạc…). */
 const AUDIO_COLORS = ["#2f7d43", "#2a6496", "#22705f", "#8a3f9e", "#9a6224", "#7a3b4f"];
 const MIN_PX = 2;
@@ -112,6 +117,7 @@ export function TimelinePanel() {
   const rulerRef = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState({ left: 0, width: 800 });
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [dropTrack, setDropTrack] = useState<string | null>(null);
   const contentW = Math.max(view.width, (durationMs / 1000) * pxPerSec + 400);
   const msToX = (ms: number) => (ms / 1000) * pxPerSec;
@@ -332,7 +338,7 @@ export function TimelinePanel() {
       const patches: Record<string, Partial<Clip>> = {};
 
       if (tool === "pen") {
-        const v = Math.min(1, Math.max(0, level0 - (ev.clientY - y0) / (TRACK_H[tk0!.kind] - 6 - CLIP_HEADER_H)));
+        const v = Math.min(1, Math.max(0, level0 - (ev.clientY - y0) / (trackH(tk0!) - 6 - CLIP_HEADER_H)));
         const fx = { ...clip.fx, ...(tk0?.kind === "audio" ? { volume: v } : { opacity: v }) };
         s.patchClips({ [clip.id]: { fx } });
         return;
@@ -414,7 +420,7 @@ export function TimelinePanel() {
   const dragCaption = (e: React.PointerEvent, seg: Segment, mode: "move" | "start" | "end") => {
     e.stopPropagation();
     st.set({ selectedId: seg.id, selectedClipId: null, inspectorTab: "caption" });
-    if (tracks.find((x) => x.kind === "caption")?.locked) return;
+    if (tracks.some((x) => x.kind === "caption" && x.locked)) return;
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
     const idx = segments.findIndex((s) => s.id === seg.id);
@@ -494,7 +500,9 @@ export function TimelinePanel() {
         <div className="tl-heads" style={{ width: HEAD_W }}>
           <div className="tl-corner" style={{ height: RULER_H }} />
           {ordered.map((tk) => (
-            <TrackHead key={tk.id} tk={tk} code={trackCode(tracks, tk)} label={tk.name}
+            <TrackHead key={tk.id} tk={tk} code={trackCode(tracks, tk)}
+              fallback={tk.kind === "caption" ? t("tl.caption") : ""}
+              renaming={renaming === tk.id} onRename={(on) => setRenaming(on ? tk.id : null)}
               onMenu={(e) => { e.preventDefault(); setMenu({ x: e.clientX, y: e.clientY, track: tk.id }); }} />
           ))}
         </div>
@@ -507,8 +515,8 @@ export function TimelinePanel() {
 
             {ordered.map((tk) => (
               <div key={tk.id} data-track={tk.id}
-                className={`tl-track ${tk.kind} ${tk.hidden || (tk.kind === "audio" && !trackAudible(tracks, tk)) ? "off" : ""} ${dropTrack === tk.id ? "drop-on" : ""}`}
-                style={{ height: TRACK_H[tk.kind] }}
+                className={`tl-track ${tk.kind} ${trackHidden(tk) || (tk.kind === "audio" && !trackAudible(tracks, tk)) ? "off" : ""} ${dropTrack === tk.id ? "drop-on" : ""}`}
+                style={{ height: trackH(tk) }}
                 onPointerDown={(e) => {
                   if (useEditor.getState().tool === "type" && e.button === 0) {
                     const el = scrollRef.current!;
@@ -524,10 +532,10 @@ export function TimelinePanel() {
                         style={{ left: msToX(s.start), width: Math.max(2, msToX(s.end - s.start)) }}
                         onPointerDown={(e) => dragCaption(e, s, "move")}
                         onDoubleClick={() => { st.seek(s.start); st.set({ selectedId: s.id, inspectorTab: "caption" }); }}
-                        title={`${s.vi}\n${s.src}`}>
+                        title={[s.src, s.vi].filter(Boolean).join("\n")}>
                         <i className="trim l" onPointerDown={(e) => dragCaption(e, s, "start")} />
-                        <span className="cap-vi">{s.vi || s.src}</span>
-                        {s.vi && s.src && <span className="cap-src">{s.src}</span>}
+                        <span className={`cap-src ${tk.srcHidden ? "dim" : ""}`}>{s.src}</span>
+                        <span className={`cap-vi ${tk.hidden ? "dim" : ""}`}>{s.vi}</span>
                         <i className="trim r" onPointerDown={(e) => dragCaption(e, s, "end")} />
                       </div>
                     ))
@@ -537,7 +545,7 @@ export function TimelinePanel() {
                         <ClipView key={c.id} clip={c} asset={c.assetId ? assetById.get(c.assetId) : undefined} kind={tk.kind}
                           level={tk.kind === "audio" ? clipFx(c).volume : tool === "pen" ? clipFx(c).opacity : undefined}
                           color={tk.kind === "audio" ? AUDIO_COLORS[tracks.filter((x) => x.kind === "audio").indexOf(tk) % AUDIO_COLORS.length] : undefined}
-                          height={TRACK_H[tk.kind]} selected={c.id === selectedClipId}
+                          height={trackH(tk)} selected={c.id === selectedClipId}
                           linkedSelected={linkedSelection && !!selClip?.linkId && selClip.linkId === c.linkId && c.id !== selClip.id}
                           pxPerSec={pxPerSec} view={view} theme={theme}
                           onDrag={(e, mode) => dragMediaClip(e, c, mode)}
@@ -569,12 +577,12 @@ export function TimelinePanel() {
           )}
           {menuTrack && (
             <>
-              <button onClick={() => { renameTrack(menuTrack, t("tl.renamePrompt")); setMenu(null); }}>{t("tl.renameTrack")}</button>
+              <button onClick={() => { setRenaming(menuTrack.id); setMenu(null); }}>{t("tl.renameTrack")}</button>
               <button disabled={menuTrack.kind === "caption"}
-                onClick={() => {
+                onClick={async () => {
                   const n = clips.filter((c) => c.trackId === menuTrack.id).length;
-                  if (!n || window.confirm(t("tl.confirmDeleteTrack", { n }))) st.removeTrack(menuTrack.id);
                   setMenu(null);
+                  if (!n || (await confirmDialog(t("tl.confirmDeleteTrack", { n })))) st.removeTrack(menuTrack.id);
                 }}>{t("tl.deleteTrack")}</button>
             </>
           )}
@@ -585,19 +593,32 @@ export function TimelinePanel() {
   );
 }
 
-function renameTrack(tk: Track, prompt: string) {
-  const name = window.prompt(prompt, tk.name);
-  if (name !== null) useEditor.getState().setTrack(tk.id, { name: name.trim() });
-}
-
-function TrackHead({ tk, code, label, onMenu }: { tk: Track; code: string; label: string; onMenu: (e: React.MouseEvent) => void }) {
+/** `fallback`: tên mặc định khi người dùng chưa đặt tên. Đổi tên bằng ô nhập tại chỗ (webview macOS không có `window.prompt`). */
+function TrackHead({ tk, code, fallback, renaming, onRename, onMenu }: {
+  tk: Track; code: string; fallback: string; renaming: boolean; onRename: (on: boolean) => void; onMenu: (e: React.MouseEvent) => void;
+}) {
   const tracks = useEditor((s) => s.tracks);
   const setTrack = useEditor((s) => s.setTrack);
   const t = useT();
   const audio = tk.kind === "audio";
+  const lr = audio && trackH(tk) >= AUDIO_LR_H;
+  const resize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const y0 = e.clientY;
+    const h0 = trackH(tk);
+    const move = (ev: PointerEvent) =>
+      useEditor.getState().setTrack(tk.id, { height: Math.round(Math.min(AUDIO_MAX_H, Math.max(TRACK_H.audio, h0 + ev.clientY - y0))) });
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   return (
-    <div className={`tl-head ${tk.kind}`} style={{ height: TRACK_H[tk.kind] }} onContextMenu={onMenu}
-      onDoubleClick={() => renameTrack(tk, t("tl.renamePrompt"))}>
+    <div className={`tl-head ${tk.kind}`} style={{ height: trackH(tk) }} onContextMenu={onMenu}
+      onDoubleClick={() => onRename(true)}>
       <div className="tl-head-row">
         <button className={`tk-btn ${tk.locked ? "on lock" : ""}`} title={t("tl.lock")} onClick={() => setTrack(tk.id, { locked: !tk.locked })}>
           <IconLock open={!tk.locked} />
@@ -608,12 +629,33 @@ function TrackHead({ tk, code, label, onMenu }: { tk: Track; code: string; label
             <button className={`mix-btn m ${tk.muted ? "on" : ""}`} title={t("tl.mute")} onClick={() => setTrack(tk.id, { muted: !tk.muted })}>M</button>
             <button className={`mix-btn s ${tk.solo ? "on" : ""}`} title={t("tl.solo")} onClick={() => setTrack(tk.id, { solo: !tk.solo })}>S</button>
           </>
-        ) : (
+        ) : tk.kind === "caption" ? null : (
           <button className={`tk-btn ${tk.hidden ? "on" : ""}`} title={t("tl.hide")} onClick={() => setTrack(tk.id, { hidden: !tk.hidden })}>
             <IconEye off={tk.hidden} />
           </button>
         )}
-        <span className="tl-head-name" title={label}>{label}</span>
+        {renaming ? (
+          <input className="tl-head-name" autoFocus defaultValue={tk.name} placeholder={fallback} title={t("tl.renamePrompt")}
+            onFocus={(e) => e.currentTarget.select()}
+            onDoubleClick={(e) => e.stopPropagation()}
+            onBlur={(e) => { setTrack(tk.id, { name: e.currentTarget.value.trim() }); onRename(false); }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              else if (e.key === "Escape") { e.currentTarget.value = tk.name; e.currentTarget.blur(); }
+            }} />
+        ) : (
+          <span className="tl-head-name" title={tk.name || fallback}>{tk.name || fallback}</span>
+        )}
+        {tk.kind === "caption" && (
+          <div className="cap-eyes">
+            <button className={`tk-btn cap-eye ${tk.srcHidden ? "on" : ""}`} title={t("tl.hideSrc")} onClick={() => setTrack(tk.id, { srcHidden: !tk.srcHidden })}>
+              <IconEye off={!!tk.srcHidden} /><small>{t("tl.capSrc")}</small>
+            </button>
+            <button className={`tk-btn cap-eye ${tk.hidden ? "on" : ""}`} title={t("tl.hideVi")} onClick={() => setTrack(tk.id, { hidden: !tk.hidden })}>
+              <IconEye off={tk.hidden} /><small>{t("tl.capVi")}</small>
+            </button>
+          </div>
+        )}
       </div>
       {audio && (
         <div className={`tl-mix ${trackAudible(tracks, tk) ? "" : "silent"}`}>
@@ -623,6 +665,16 @@ function TrackHead({ tk, code, label, onMenu }: { tk: Track; code: string; label
           <span className="tk-gain">{Math.round(tk.gain * 100)}</span>
         </div>
       )}
+      {lr && (["gainL", "gainR"] as const).map((k) => (
+        <div key={k} className={`tl-mix ch ${trackAudible(tracks, tk) ? "" : "silent"}`}>
+          <b className="tk-ch">{t(k === "gainL" ? "tl.chL" : "tl.chR")}</b>
+          <input type="range" min={0} max={1} step={0.01} value={tk[k] ?? 1} title={t(k === "gainL" ? "tl.gainL" : "tl.gainR", { n: Math.round((tk[k] ?? 1) * 100) })}
+            onChange={(e) => setTrack(tk.id, { [k]: Number(e.target.value) })}
+            onDoubleClick={(e) => { e.stopPropagation(); setTrack(tk.id, { [k]: 1 }); }} />
+          <span className="tk-gain">{Math.round((tk[k] ?? 1) * 100)}</span>
+        </div>
+      ))}
+      {audio && <div className="tl-resize" title={t("tl.resize")} onPointerDown={resize} onDoubleClick={(e) => { e.stopPropagation(); setTrack(tk.id, { height: undefined }); }} />}
     </div>
   );
 }
@@ -657,16 +709,17 @@ function ClipView({ clip, asset, kind, color, level, height, selected, linkedSel
   const bodyH = height - 6 - CLIP_HEADER_H;
   const thumbW = Math.round((bodyH * 16) / 9);
 
-  // Ảnh đầu và cuối clip (lấy thumbnail gần nhất theo thời gian nguồn); clip quá hẹp thì chỉ ảnh đầu.
+  // Dải ảnh phủ kín thân clip, mỗi ô lấy thumbnail gần nhất theo thời gian nguồn; chỉ vẽ các ô đang nằm trong vùng nhìn thấy.
   let thumbs: React.ReactNode = null;
-  if (kind === "video" && asset?.kind === "video" && asset.thumbs.length) {
+  if (kind === "video" && asset?.kind === "video" && asset.thumbs.length && thumbW > 0) {
     const at = (ms: number) => asset.thumbs[Math.min(asset.thumbs.length - 1, Math.max(0, Math.floor((ms / asset.duration_ms) * asset.thumbs.length)))];
-    thumbs = (
-      <>
-        <img className="thumb head" src={convertFileSrc(at(clip.in))} draggable={false} style={{ width: thumbW }} />
-        {width > thumbW * 2.5 && <img className="thumb tail" src={convertFileSrc(at(clip.in + clip.dur - 1))} draggable={false} style={{ width: thumbW }} />}
-      </>
-    );
+    const n = Math.ceil(width / thumbW);
+    const first = Math.max(0, Math.floor((view.left - left) / thumbW));
+    const last = Math.min(n - 1, Math.floor((view.left + view.width - left) / thumbW));
+    const tiles: React.ReactNode[] = [];
+    for (let i = first; i <= last; i++)
+      tiles.push(<img key={i} className="thumb" src={convertFileSrc(at(clip.in + ((i * thumbW) / pxPerSec) * 1000))} draggable={false} style={{ left: i * thumbW, width: thumbW }} />);
+    thumbs = <>{tiles}</>;
   } else if (kind === "video" && asset?.kind === "image") {
     thumbs = <div className="thumb head" style={{ width: thumbW, backgroundImage: `url("${convertFileSrc(asset.path)}")` }} />;
   }
