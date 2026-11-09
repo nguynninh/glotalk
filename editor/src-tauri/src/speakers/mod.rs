@@ -29,8 +29,12 @@ const RELIABLE_MS: u64 = 1_200;
 const MIN_MS: u64 = 400;
 /// Câu dài chỉ lấy đoạn giữa; 10 s đủ cho đặc trưng ổn định.
 const MAX_MS: u64 = 10_000;
-/// Câu ngắn và cụm một câu chỉ được gán vào nhân vật có độ tương đồng tối thiểu này.
+/// Câu chỉ được gán vào nhân vật có độ tương đồng tối thiểu này; thấp hơn thì để trống.
 const ASSIGN_MIN: f32 = 0.3;
+/// Cụm phải có ít nhất phần nghìn này của số câu dài (và tối thiểu 2 câu) mới thành nhân vật.
+const MIN_SPEAKER_PERMILLE: usize = 5;
+/// Gộp hai nhân vật khi giọng trung bình của họ giống nhau từ mức này.
+const CENTROID_MERGE: f32 = 0.7;
 /// Số câu dài nhất mỗi nhân vật dùng để đo cao độ.
 const PITCH_LINES: usize = 20;
 
@@ -191,7 +195,13 @@ pub fn run(
     Ok(assign(spans, &embeddings, pcm, options))
 }
 
-/// Gom cụm câu dài, gán câu ngắn vào nhân vật gần nhất, rồi đo cao độ từng nhân vật.
+/// Gom cụm câu dài theo từng câu, giữ cụm đủ lớn làm nhân vật, gộp nhân vật theo giọng trung bình,
+/// rồi gán mọi câu vào nhân vật gần nhất và đo cao độ từng nhân vật.
+///
+/// Phim có nhạc nền và câu ngắn làm hai câu của cùng một người thường giống nhau dưới 0,5, nên gom
+/// từng câu tách một người thành nhiều cụm (phim ngắn 2 giờ, 4.080 câu ra 311 nhân vật; đặc trưng
+/// giọng của sherpa-onnx cũng ra 368 cụm). Tâm cụm trung bình nhiều câu nên ổn định hơn: các cụm
+/// tách nhầm có tâm giống nhau tới 0,86, gộp ở 0,7 còn 17 nhân vật.
 fn assign(spans: &[Span], embeddings: &[Option<Vec<f32>>], pcm: &[u8], options: Options) -> Outcome {
     let dur = |i: usize| spans[i].end.saturating_sub(spans[i].start);
     let with_vec: Vec<usize> = (0..spans.len()).filter(|&i| embeddings[i].is_some()).collect();
@@ -200,45 +210,33 @@ fn assign(spans: &[Span], embeddings: &[Option<Vec<f32>>], pcm: &[u8], options: 
         reliable = with_vec.clone();
     }
     let vectors: Vec<Vec<f32>> = reliable.iter().map(|&i| embeddings[i].clone().expect("đã lọc")).collect();
-    let groups = agglomerate(&vectors, options.threshold, options.speakers);
-    let mut cluster: Vec<Option<usize>> = vec![None; spans.len()];
-    for (&i, &g) in reliable.iter().zip(&groups) {
-        cluster[i] = Some(g);
-    }
+    let groups = agglomerate(&vectors, options.threshold, 0);
     let k = groups.iter().max().map_or(0, |m| m + 1);
-    let centroids = |cluster: &[Option<usize>]| -> Vec<Vec<f32>> {
-        (0..k)
-            .map(|g| {
-                let mut c = vec![0.0f32; vectors.first().map_or(0, Vec::len)];
-                for (i, _) in cluster.iter().enumerate().filter(|(_, x)| **x == Some(g)) {
-                    c.iter_mut().zip(embeddings[i].as_ref().expect("có cụm thì có vector")).for_each(|(a, b)| *a += b);
-                }
-                normalize(&mut c);
-                c
-            })
-            .collect()
-    };
-    let nearest = |v: &[f32], centroids: &[Vec<f32>], skip: Option<usize>| {
-        centroids.iter().enumerate().filter(|(g, _)| Some(*g) != skip).map(|(g, c)| (g, dot(v, c))).max_by(|a, b| a.1.total_cmp(&b.1))
-    };
-    // Cụm chỉ một câu thường là tiếng ồn/nhạc hoặc câu lạc giọng: gộp vào nhân vật gần nhất nếu đủ giống.
-    if options.speakers == 0 && k > 1 {
-        let cents = centroids(&cluster);
-        for g in 0..k {
-            let members: Vec<usize> = (0..spans.len()).filter(|&i| cluster[i] == Some(g)).collect();
-            let [only] = members[..] else { continue };
-            if let Some((to, s)) = nearest(embeddings[only].as_ref().expect("có vector"), &cents, Some(g)) {
-                if s >= ASSIGN_MIN && (0..spans.len()).any(|i| cluster[i] == Some(to) && i != only) {
-                    cluster[only] = Some(to);
-                }
-            }
+    let members: Vec<Vec<usize>> = (0..k).map(|g| reliable.iter().zip(&groups).filter(|(_, x)| **x == g).map(|(&i, _)| i).collect()).collect();
+    let centroid = |ids: &mut dyn Iterator<Item = usize>| {
+        let mut c = vec![0.0f32; vectors.first().map_or(0, Vec::len)];
+        for i in ids {
+            c.iter_mut().zip(embeddings[i].as_ref().expect("có cụm thì có vector")).for_each(|(a, b)| *a += b);
         }
+        normalize(&mut c);
+        c
+    };
+    // Cụm nhỏ thường là câu lạc giọng hoặc lẫn nhạc: không thành nhân vật riêng, chỉ được gán lại.
+    let min = (reliable.len() * MIN_SPEAKER_PERMILLE / 1000).max(2);
+    let mut kept: Vec<&Vec<usize>> = members.iter().filter(|m| m.len() >= min).collect();
+    if kept.is_empty() {
+        kept = members.iter().collect();
     }
-    let cents = centroids(&cluster);
+    let cents: Vec<Vec<f32>> = kept.iter().map(|m| centroid(&mut m.iter().copied())).collect();
+    let merged = agglomerate(&cents, CENTROID_MERGE, options.speakers);
+    let k = merged.iter().max().map_or(0, |m| m + 1);
+    let finals: Vec<Vec<f32>> = (0..k)
+        .map(|g| centroid(&mut kept.iter().zip(&merged).filter(|(_, x)| **x == g).flat_map(|(m, _)| m.iter().copied())))
+        .collect();
+    let mut cluster: Vec<Option<usize>> = vec![None; spans.len()];
     for &i in &with_vec {
-        if cluster[i].is_none() {
-            cluster[i] = nearest(embeddings[i].as_ref().expect("có vector"), &cents, None).filter(|(_, s)| *s >= ASSIGN_MIN).map(|(g, _)| g);
-        }
+        let v = embeddings[i].as_ref().expect("có vector");
+        cluster[i] = finals.iter().enumerate().map(|(g, c)| (g, dot(v, c))).max_by(|a, b| a.1.total_cmp(&b.1)).filter(|(_, s)| *s >= ASSIGN_MIN).map(|(g, _)| g);
     }
 
     // Đánh nhãn lại 1..n theo tổng thời lượng nói, bỏ cụm đã rỗng.
@@ -279,12 +277,26 @@ mod tests {
             Span { start: 5_000, end: 7_000 },
             Span { start: 7_000, end: 7_600 },
             Span { start: 8_000, end: 8_200 },
+            Span { start: 9_000, end: 10_500 },
+            Span { start: 11_000, end: 13_000 },
         ];
-        let embeddings = vec![unit(&[1.0, 0.0]), unit(&[0.0, 1.0]), unit(&[0.95, 0.1]), unit(&[0.1, 1.0]), None];
+        let embeddings = vec![
+            unit(&[1.0, 0.0, 0.0]),
+            unit(&[0.0, 1.0, 0.0]),
+            unit(&[0.95, 0.1, 0.0]),
+            unit(&[0.1, 1.0, 0.0]),
+            None,
+            unit(&[0.05, 0.9, 0.0]),
+            // Cụm một câu, không giống ai: không thành nhân vật, để trống.
+            unit(&[0.0, 0.0, 1.0]),
+        ];
         let out = assign(&spans, &embeddings, &[], Options { threshold: 0.6, speakers: 0 });
-        // Nhân vật A nói 4 s (câu 0, 2), B nói 3,6 s (câu 1 và câu ngắn 3).
-        assert_eq!(out.labels, vec![1, 2, 1, 2, 0]);
-        assert_eq!(out.speakers.iter().map(|s| s.lines).collect::<Vec<_>>(), vec![2, 2]);
+        // B nói 5,1 s (câu 1, 5 và câu ngắn 3), A nói 4 s (câu 0, 2).
+        assert_eq!(out.labels, vec![2, 1, 2, 1, 0, 1, 0]);
+        assert_eq!(out.speakers.iter().map(|s| s.lines).collect::<Vec<_>>(), vec![3, 2]);
+        // Ép một nhân vật: hai cụm gộp ở mức tâm cụm.
+        let one = assign(&spans, &embeddings, &[], Options { threshold: 0.6, speakers: 1 });
+        assert_eq!(one.speakers.len(), 1);
     }
 
     /// Chạy model thật trên file có nhiều người nói:
@@ -326,3 +338,4 @@ mod tests {
         assert!(!out.speakers.is_empty());
     }
 }
+

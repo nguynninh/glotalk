@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-09
+
+### Fixed
+
+- Speaker detection split one character into many on long videos with music
+  and short lines: a 2-hour short drama (4,080 captions) came out with 311
+  speakers. Line-by-line clustering is now only the first step. Clusters holding
+  less than 0.5% of the long lines (or fewer than 2) no longer become speakers,
+  speakers whose average voices are at least 0.7 alike are merged, and every
+  caption then joins the nearest speaker or stays unassigned below 0.3. The same
+  video now gives 19 speakers with 190 lines unassigned; the four-speaker sample
+  is unchanged. "Số nhân vật" now merges whole speakers down to that number.
+
 ## [0.3.0] - 2026-11-09
 
 Speakers and Vietnamese pronouns, ahead of the dubbing step. Everything runs on
@@ -168,6 +181,7 @@ First release. Earlier `0.1.0` builds were never published.
   token and the remembered sign-in token are stored unencrypted in
   `localStorage`.
 
-[Unreleased]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.0...HEAD
+[Unreleased]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.1...HEAD
+[0.3.1]: https://github.com/nguynninh/glotalk/compare/editor/v0.3.0...editor/v0.3.1
 [0.3.0]: https://github.com/nguynninh/glotalk/compare/editor/v0.2.0...editor/v0.3.0
 [0.2.0]: https://github.com/nguynninh/glotalk/releases/tag/editor/v0.2.0
