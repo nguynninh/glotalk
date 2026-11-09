@@ -6,10 +6,12 @@ pub enum Event {
     Downloading,
     /// Recognition of the piece starting at `offset` seconds began.
     Recognizing { offset: f64, duration: f64 },
-    Recognized { index: usize },
+    /// Segment `index` was recognized; it ends `end` seconds into the video.
+    Recognized { index: usize, end: f64 },
     Translated { index: usize },
-    /// Recognition and translation are complete; speech may still be running.
-    Transcribed { segments: usize },
+    /// Recognition and translation are complete; speech may still be running. `speech` is
+    /// how many segments were queued for speech, each reported once by [`Event::Spoken`].
+    Transcribed { segments: usize, speech: usize },
     Spoken { index: usize },
     Muxing,
 }

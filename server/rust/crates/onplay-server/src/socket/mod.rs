@@ -1,6 +1,7 @@
 //! WebSocket listener: origin-checked handshake, then one thread per connection.
 
 mod client_config;
+mod job;
 mod outbox;
 mod session;
 mod transport;
@@ -18,6 +19,7 @@ use tungstenite::http::StatusCode;
 use tungstenite::protocol::WebSocketConfig;
 
 use crate::events::Client;
+use crate::jobs::tokens::bearer;
 use crate::{Event, Services};
 
 /// Largest client message: one second of PCM16 at 16 kHz.
@@ -44,9 +46,12 @@ fn accept(stream: TcpStream, services: &Arc<Services>, connections: &AtomicU64) 
     let peer = stream.peer_addr().map(|address| address.ip().to_string()).unwrap_or_default();
     // Set by the handshake callback: the client's headers and whether it was refused.
     let mut client = Client::default();
+    // Kept out of `client`, which is logged.
+    let mut token = None;
     let mut refused = false;
     let check_origin = |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
         client = describe_client(request, peer);
+        token = request.headers().get("Authorization").and_then(|value| value.to_str().ok()).and_then(bearer).map(str::to_owned);
         if client.origin.as_ref().is_some_and(|origin| origins.iter().any(|allowed| allowed == origin)) {
             return Ok(response);
         }
@@ -61,7 +66,7 @@ fn accept(stream: TcpStream, services: &Arc<Services>, connections: &AtomicU64) 
         Some(socket) => {
             let connection = connections.fetch_add(1, Ordering::Relaxed) + 1;
             services.observer.event(Event::Opened { connection, client });
-            session::run(socket, services, connection);
+            session::run(socket, services, connection, token);
         }
         None if refused => services.observer.event(Event::Refused { client }),
         // Not a WebSocket handshake, or the client left during it.

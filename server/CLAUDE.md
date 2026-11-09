@@ -2,33 +2,44 @@
 
 ## Project context
 
-This is `onplay-stt`, an initial speech-to-text workspace. It is not the Glotalk
-Android application. Do not assume Android services, Gradle modules, Compose,
-AIDL, translation engines or app release versions exist here.
+This is `onplay-stt`, a Rust speech-to-text, translation and speech workspace for
+Apple Silicon macOS. It is not the Glotalk Android application. Do not assume
+Android services, Gradle modules, Compose or AIDL exist here.
 
 Current layout:
 
-- `rust/` is a Cargo workspace. `onplay-sherpa-sys` binds the Sherpa ONNX C API
-  (bindgen); `onplay-sherpa` is the only safe wrapper allowed `unsafe`.
+- `rust/` is a Cargo workspace; one version for all crates is set in
+  `rust/Cargo.toml` (`workspace.package.version`).
+- `onplay-sherpa-sys` binds the Sherpa ONNX C API (bindgen); `onplay-sherpa` is the
+  only safe wrapper allowed `unsafe` (the workspace forbids it elsewhere).
 - `onplay-stt` exposes the streaming `Engine`/`Session` API, WAV reading and
   diarization; `onplay-stt-cli` builds `onplay-stt`, `onplay-recognize` and
   `onplay-speakers`.
+- `onplay-server`/`onplay-server-cli` build `onplay-server`, the streaming
+  WebSocket server (`127.0.0.1:8766`, several sessions at once up to
+  `ONPLAY_MAX_SESSIONS`). It also runs dub jobs (`build/onplay-dub` child processes)
+  and serves their results over HTTP on `127.0.0.1:8767`; it has no web UI.
+- `onplay-translation`/`onplay-translation-cli` build `onplay-translation`, the
+  loopback HTTP translation router (port 5002; CTranslate2 via `ct2rs`, Qwen via
+  candle; routes in `config/translation.yaml`). `onplay-translation-bench`/
+  `-bench-cli` benchmark it.
 - `onplay-tts`/`onplay-tts-cli` run KorvaTTS on ONNX Runtime; `onplay-dub`/
   `onplay-dub-cli` translate and dub videos.
-- `scripts/` contains setup, build, run and test entry points.
-- `rust/crates/onplay-stt/tests/session.rs` checks session validation and
-  finalization; `onplay-stt-cli/tests/cli.rs` runs real-model English/Vietnamese
-  checks.
-- `onplay-server`/`onplay-server-cli` build `onplay-server`, the streaming
-  WebSocket server (`127.0.0.1:8766`); there is no HTTP API or web UI.
-- `onplay-translation`/`onplay-translation-cli` build `onplay-translation`, the
-  translation router (port 5002; CTranslate2 via `ct2rs`, Qwen via candle).
-- `onplay-server-cli/tests/socket.rs` starts `build/onplay-server` and checks it.
-- `.deps/` and `models/` hold local runtime and model downloads.
+- `scripts/setup/` downloads hash-pinned assets, `scripts/dev/` builds, runs and
+  tests, `scripts/prod/` runs the public server and packages, `scripts/tools/` holds
+  the recognition, TTS, dubbing and benchmark wrappers.
+- Tests: `onplay-stt/tests/session.rs` (session validation and finalization),
+  `onplay-stt-cli/tests/cli.rs` (real-model English/Vietnamese CLI checks) and
+  `onplay-server-cli/tests/socket.rs` (starts `build/onplay-server` and checks it).
+- `docs/` holds the WebSocket protocol and translation records.
+- `.deps/` and `models/` hold local runtime and model downloads; `sessions/`,
+  `build/` and `dist/` hold stored sessions, build output and packages. All are
+  ignored.
 
-The shell bootstrap targets macOS ARM64, pins Sherpa ONNX v2.0.1 and verifies
-runtime/model archive hashes. Check the current scripts before changing versions
-or documenting commands. A project license is not currently present.
+The setup scripts target macOS ARM64, pin Sherpa ONNX v2.0.1 and verify the SHA-256
+of every download. Python is used only to convert NLLB to CTranslate2. Check the
+current scripts before changing versions or documenting commands. A project license
+is not currently present.
 
 The API accepts mono 16 kHz float PCM in chunks of at most 16,000 samples,
 with finite values in `[-1, 1]`. It is synchronous and single-worker-thread;
@@ -68,8 +79,9 @@ implementation and relevant evidence exist.
 ## Verification
 
 Review the final diff and changed-file list. Run `./scripts/dev/build.sh` and `./scripts/dev/test.sh` when native changes require
-them and assets are available. The latter runs the Rust workspace tests (including
-real-model session tests) and real model smoke checks; no sanitizer runs. A successful compile proves compilation, not recognition
+them and assets are available. The latter builds, then runs all Rust workspace tests
+including the real-model ones (session, CLI and socket checks; port 8766 must be
+free); no sanitizer runs. A successful compile proves compilation, not recognition
 accuracy, resource cleanup or realtime performance.
 
 For documentation-only work, verify paths, commands, links and implementation

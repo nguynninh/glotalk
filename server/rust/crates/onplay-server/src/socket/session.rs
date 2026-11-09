@@ -1,4 +1,5 @@
-//! One connection: options, then PCM chunks until `{"type": "end"}`.
+//! One connection: options, then PCM chunks until `{"type": "end"}`; or a dub job command
+//! ([`super::job`]).
 
 use std::net::TcpStream;
 use std::sync::atomic::Ordering;
@@ -12,6 +13,7 @@ use serde_json::{json, Value};
 use tungstenite::WebSocket;
 
 use super::client_config::{ClientConfig, Speakers};
+use super::job;
 use super::outbox::Outbox;
 use super::transport::{Ended, Incoming, Transport};
 use super::MAX_MESSAGE_BYTES;
@@ -36,6 +38,14 @@ enum Failure {
     Closed,
     /// Sent to the client in an `error` event, then the connection closes.
     Message(String),
+    /// A job connection's error, already sent; the code.
+    Sent(String),
+}
+
+/// How a connection that did not fail was used.
+enum Served {
+    /// A dub job command, answered completely.
+    Job,
 }
 
 impl From<Ended> for Failure {
@@ -61,16 +71,22 @@ struct Running {
     slot: EngineSlot,
 }
 
-pub fn run(socket: WebSocket<TcpStream>, services: &Arc<Services>, connection: u64) {
+/// `token` is the `Authorization: Bearer` token of the handshake, for job commands.
+pub fn run(socket: WebSocket<TcpStream>, services: &Arc<Services>, connection: u64, token: Option<String>) {
     let opened = Instant::now();
     let trace = Trace::new(services.observer.clone(), connection, opened);
     let (outbox, outgoing) = Outbox::new();
     let Ok(mut transport) = Transport::new(socket, outgoing, trace.clone()) else { return };
     let mut running = None;
     let mut outcome = Outcome::Closed;
-    if let Err(Failure::Message(text)) = serve(&mut transport, &outbox, services, &mut running, connection, &trace) {
-        let _ = outbox.emit(&json!({"type": "error", "text": text}));
-        outcome = Outcome::Error(text);
+    match serve(&mut transport, &outbox, services, &mut running, connection, &trace, token.as_deref()) {
+        Err(Failure::Message(text)) => {
+            let _ = outbox.emit(&json!({"type": "error", "text": text}));
+            outcome = Outcome::Error(text);
+        }
+        Err(Failure::Sent(code)) => outcome = Outcome::Error(code),
+        Ok(Served::Job) => outcome = Outcome::Done,
+        Err(Failure::Closed) => {}
     }
     outbox.cancel();
     if let Some(running) = running.as_mut() {
@@ -102,9 +118,22 @@ pub fn run(socket: WebSocket<TcpStream>, services: &Arc<Services>, connection: u
     });
 }
 
-fn serve(transport: &mut Transport, outbox: &Outbox, services: &Arc<Services>, running: &mut Option<Running>, connection: u64, trace: &Trace) -> Result<(), Failure> {
+fn serve(
+    transport: &mut Transport,
+    outbox: &Outbox,
+    services: &Arc<Services>,
+    running: &mut Option<Running>,
+    connection: u64,
+    trace: &Trace,
+    token: Option<&str>,
+) -> Result<Served, Failure> {
     let config = match transport.next(Some(Instant::now() + CONFIG_TIMEOUT))? {
-        Some(Incoming::Text(text)) => ClientConfig::parse(&text).or_else(fail)?,
+        Some(Incoming::Text(text)) => match serde_json::from_str::<Value>(&text) {
+            Ok(command) if job::is_command(&command) => {
+                return job::serve(transport, outbox, &services.jobs, &command, token).map(|()| Served::Job).map_err(Failure::Sent);
+            }
+            _ => ClientConfig::parse(&text).or_else(fail)?,
+        },
         Some(Incoming::Binary(_)) => return fail("Cấu hình không hợp lệ."),
         None => return fail("Không nhận được cấu hình trong 10 giây."),
     };

@@ -11,10 +11,19 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
+    output(program, args).map(drop)
+}
+
+/// Runs `program` to completion and returns its stdout.
+pub(crate) fn output<I, S>(program: &str, args: I) -> Result<Vec<u8>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let output = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .output()
         .map_err(|error| Error::Command { program: program.into(), detail: error.to_string() })?;
@@ -22,7 +31,7 @@ where
         let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
         return Err(Error::Command { program: program.into(), detail: format!("{} {detail}", output.status) });
     }
-    Ok(())
+    Ok(output.stdout)
 }
 
 /// Whether `program` starts from PATH; `version_flag` is its harmless version option

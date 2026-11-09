@@ -10,5 +10,10 @@ __pycache__/
 
 AGENTS.md
 sessions/
+/jobs/
+/dub-tokens
 dist/
 rust/target/
+
+# Local test outputs
+/video.*

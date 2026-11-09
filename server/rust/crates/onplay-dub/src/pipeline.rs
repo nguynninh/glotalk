@@ -82,6 +82,8 @@ pub struct Outputs {
     pub video: PathBuf,
     pub translated_srt: PathBuf,
     pub original_srt: PathBuf,
+    /// The source language detected for the most segments.
+    pub source_language: Option<String>,
 }
 
 pub fn run(project: &Project, options: &Options, observer: &dyn Observer) -> Result<Outputs> {
@@ -107,7 +109,7 @@ pub fn run(project: &Project, options: &Options, observer: &dyn Observer) -> Res
     let transcribe = |queue: &mut dyn FnMut(Job)| {
         transcribe(project, options, &translator, &audio, duration, work.path(), observer, queue)
     };
-    let (segments, clips, rate) = match &speech {
+    let ((segments, source_language), clips, rate) = match &speech {
         Some((assets, language)) => {
             let config = PoolConfig { assets, language: *language, workers: options.tts_workers, threads: options.tts_threads };
             speech::run(&config, observer, transcribe)?
@@ -132,7 +134,7 @@ pub fn run(project: &Project, options: &Options, observer: &dyn Observer) -> Res
     observer.event(Event::Muxing);
     let dub = track.as_ref().map(|track| Dub { track: &track_path, spans: &track.spans, background: options.background });
     media::mux(&input.video, dub, &outputs.translated_srt, &options.target, &outputs.video, work.path())?;
-    Ok(outputs)
+    Ok(Outputs { source_language, ..outputs })
 }
 
 /// Recognizes and translates every segment; each one is queued for speech once the next
@@ -147,13 +149,16 @@ fn transcribe(
     work: &Path,
     observer: &dyn Observer,
     queue: &mut dyn FnMut(Job),
-) -> Result<Vec<Segment>> {
+) -> Result<(Vec<Segment>, Option<String>)> {
     let mut segments: Vec<Segment> = Vec::new();
+    let mut languages: Vec<String> = Vec::new();
+    let mut speech = 0;
     let mut enqueue = |segments: &[Segment], index: usize, following: f64| {
         let segment = &segments[index];
         if options.subtitles_only || !segment.dub {
             return;
         }
+        speech += 1;
         let voice = voices::voice_for(&options.target, segment.speaker).expect("target validated as speakable");
         // Translated speech may borrow the pause before the next segment but not overlap it.
         let max_seconds = (segment.end.max(following) - segment.start) as f32;
@@ -161,9 +166,10 @@ fn transcribe(
     };
     recognize(project, audio, duration, options.threads, work, observer, |mut segment| {
         let index = segments.len();
-        observer.event(Event::Recognized { index });
+        observer.event(Event::Recognized { index, end: segment.end });
         let translation = translator.translate(&sentence_case(&segment.text), &options.target)?;
         segment.dub = translation.source != options.target;
+        languages.push(translation.source);
         segment.translation = translation.text;
         observer.event(Event::Translated { index });
         let start = segment.start;
@@ -176,8 +182,21 @@ fn transcribe(
     if let Some(last) = segments.len().checked_sub(1) {
         enqueue(&segments, last, duration);
     }
-    observer.event(Event::Transcribed { segments: segments.len() });
-    Ok(segments)
+    observer.event(Event::Transcribed { segments: segments.len(), speech });
+    Ok((segments, most_common(languages)))
+}
+
+/// The language detected for the most segments; the first one seen on a tie.
+fn most_common(languages: Vec<String>) -> Option<String> {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for language in languages {
+        match counts.iter_mut().find(|(seen, _)| *seen == language) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((language, 1)),
+        }
+    }
+    let best = counts.iter().map(|(_, count)| *count).max()?;
+    counts.into_iter().find(|(_, count)| *count == best).map(|(language, _)| language)
 }
 
 /// `<stem>.<target>.mp4`, `<stem>.<target>.srt` and `<stem>.original.srt`; a downloaded
@@ -194,6 +213,7 @@ fn output_paths(input: &Input, options: &Options) -> Result<Outputs> {
         translated_srt: video.with_file_name(format!("{name}.{}.srt", options.target)),
         original_srt: video.with_file_name(format!("{name}.original.srt")),
         video,
+        source_language: None,
     })
 }
 
@@ -216,6 +236,14 @@ mod tests {
         let outputs = paths("/v/talk.mp4", false, Some("/o/out.mp4"));
         assert_eq!(outputs.video, Path::new("/o/out.mp4"));
         assert_eq!(outputs.translated_srt, Path::new("/o/out.vi.srt"));
+    }
+
+    #[test]
+    fn picks_the_most_common_language() {
+        let languages = |list: &[&str]| list.iter().map(|language| (*language).to_owned()).collect();
+        assert_eq!(most_common(languages(&["en", "zh", "zh", "en", "zh"])).as_deref(), Some("zh"));
+        assert_eq!(most_common(languages(&["en", "zh"])).as_deref(), Some("en"));
+        assert_eq!(most_common(Vec::new()), None);
     }
 
     #[test]

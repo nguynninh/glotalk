@@ -1,28 +1,62 @@
 # Changelog
 
-All notable changes to Onplay STT will be recorded here.
+All notable changes to Onplay STT are recorded here.
 
-Entries are grouped by Added, Changed, Fixed and Removed as applicable. Keep
+Entries are grouped by Added, Changed, Fixed and Removed, in that order. Keep
 unreleased work under Unreleased until an actual version is assigned; do not invent
 release versions or import another project's release history. The version is set
 once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-11-05
+### Added
+
+- Dub jobs for the iOS app (phase 1 of `docs/video-dubbing-design.md`): a WebSocket
+  connection whose first message has a `type` sends `dub`, `job`, `cancel`, `delete`
+  or `list` (protocol version 1, structured error codes). A link is dubbed by a
+  `build/onplay-dub` child process, one job at a time with a queue of 8 and one active
+  job per tester token; jobs outlive the connection and are kept 24 h.
+- Results over HTTP on `127.0.0.1:8767`: an HLS stream (`/jobs/<id>/hls/<key>/`,
+  VOD fMP4 with WebVTT subtitle renditions, no header needed) and both SRT files
+  (bearer token), with `ETag`, `Last-Modified`, `Range` and `If-Range`.
+- Tester tokens in `dub-tokens` (`ONPLAY_DUB_TOKENS`), stored as SHA-256 hashes and
+  created by `scripts/prod/dub-token.sh` and reread when the file changes, so tokens
+  are added and revoked without a restart. Without them dubbing stays off. New settings:
+  `ONPLAY_JOB_DIR`, `ONPLAY_DUB_MAX_SECONDS` (default 900), `ONPLAY_JOB_MAX_GB`
+  (default 20).
+- `onplay-dub --hls DIR` packages the result as HLS; `--progress` prints events and
+  the result as JSON lines. Direct media links, for which yt-dlp reports no duration,
+  get it from ffprobe.
 
 ### Changed
-- Added connection and pipeline logging controls for the server.
-- `onplay-server` serves several recognition sessions at once instead of one,
-  with a configurable session limit.
-- The `onplay-server` start line clearly labels its listening address and allowed
-  `Origin` values.
 
-- The `onplay-server` start line shows the listening address
-  (`ws://127.0.0.1:8766`) and labels the allowed `Origin` values, which it used to print as
-  if they were the stream address.
+- `scripts/dev/build.sh` also builds `build/onplay-dub`.
+- `onplay_dub::Event::Recognized` carries the segment's end time and `Transcribed` the
+  number of segments queued for speech; `Outputs` has the most common detected source
+  language.
+
+## [1.0.1] - 2026-11-05
+
+### Added
+
+- `onplay-server` serves several recognition sessions at once instead of one.
+  `ONPLAY_MAX_SESSIONS` (default 4) sets the limit; extra connections get an `error`
+  event, and each busy session may load its own streaming engine.
+- `ONPLAY_LOG=1` prints one stdout line per connection event (client address,
+  `Origin`, `User-Agent`, languages, engine slot, outcome); `ONPLAY_DEBUG=1` also
+  prints every WebSocket frame and pipeline step timings. Neither prints audio or
+  recognized text.
+
+### Changed
+
+- The `onplay-server` start line shows the listening address (`ws://127.0.0.1:8766`)
+  and labels the allowed `Origin` values, which it used to print as if they were the
+  stream address.
 
 ## [1.0.0] - 2026-11-05
+
+First version. It ports the earlier, unreleased C++/Python prototype to Rust; entries
+compare against that prototype.
 
 ### Added
 
@@ -51,8 +85,7 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 - Rust `onplay-server` (crates `onplay-server`, `onplay-server-cli`), started by
   `scripts/dev/server.sh`, replaces the Python WebSocket server on `127.0.0.1:8766`
   with the same protocol. STT and KorvaTTS run in process instead of through
-  `onplay-stt` child processes and Python KorvaTTS; the translation router stays
-  Python. Idle connections are pinged and dropped after 20 s without a pong.
+  `onplay-stt` child processes and Python KorvaTTS. Idle connections are pinged and dropped after 20 s without a pong.
   Recognition models stay loaded between sessions on one worker thread, and
   end-of-input diarization skips helper recognizers below 120 s of audio.
 - Rust `onplay-stt`, `onplay-recognize` and `onplay-speakers` (crates
@@ -86,29 +119,19 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
   estimated client playback queue is behind, and `audio_skipped` for segments
   that would play more than 4 seconds late. A full speech queue now drops the
   oldest segment instead of disabling speech.
-- Browser translated-audio playback synthesizes the next segment ahead, speeds
-  up when segments pile up and skips segments the media has outrun.
 
-- Configurable local translation router with NLLB-200 research baseline, explicit
-  Qwen context mode, OPUS fallback, pair routes, output validation, bounded cache
-  and aggregate metrics. Preserve the original POST STT contract.
+### Changed
 
-- Optional transcript translation through a configured LibreTranslate instance,
-  with target-language selection, a separate result, retry after editing, and
-  translation copy/download actions.
-
-- Experimental offline speaker labels and timestamps in the local UI, with an
-  original-transcript comparison, checksum-pinned model setup and real-inference
-  lifecycle checks. Streaming text remains available during playback; speaker
-  processing runs afterward for recordings up to 10 minutes.
-
-- C++20 streaming recognition API using the Sherpa ONNX C API, with partial and
-  final callbacks, endpoint reset and input validation.
-- WAV CLI with optional realtime input pacing and processing metrics.
-- macOS ARM64 setup, build, run and test scripts, plus CMake build targets.
-- Session validation tests and real-model English/Vietnamese smoke checks.
-- Project documentation describing the Sherpa ONNX speech-to-text setup, API
-  contracts and verification limits.
+- `ONPLAY_CAPTURE_AUDIO` takes `0` (nothing), `1` (transcript and audio, as before),
+  `2` (transcript only) or `3` (audio only); other values stop the server instead of
+  being ignored.
+- Native binaries copy their runtime dylibs into `build/lib` and resolve them
+  through `@loader_path/lib` instead of an absolute `.deps` path.
+- Live translation uses warmed native INT8 OPUS/NLLB; Qwen is kept for explicit
+  context translation.
+- Provisional speaker labels are shown during streaming, including long recordings,
+  instead of waiting for the end of input; offline refinement is kept for recordings
+  up to 10 minutes.
 
 ### Fixed
 
@@ -128,28 +151,6 @@ once for all crates in `rust/Cargo.toml` (`workspace.package.version`).
 - Offline diarization with helper recognizers could deadlock: a helper waited for
   jobs while holding the queue lock that the calling thread needed. Helpers now
   start after every turn is queued and never block on the queue.
-
-### Changed
-
-- `ONPLAY_CAPTURE_AUDIO` takes `0` (nothing), `1` (transcript and audio, as before),
-  `2` (transcript only) or `3` (audio only); other values stop the server instead of
-  being ignored.
-- Native binaries copy their runtime dylibs into `build/lib` and resolve them
-  through `@loader_path/lib` instead of an absolute `.deps` path.
-- Use warmed native INT8 OPUS/NLLB for live translation, keeping Qwen for explicit
-  manual context translation. Add a 500 ms latency check and HTTPS mobile guide.
-
-- Default translation to local LibreTranslate on loopback port 5001, with a
-  digest-pinned Docker Compose service and persistent English/Vietnamese/Chinese models.
-
-- Send original and translated segments over the same WebSocket during playback,
-  with revision/segment IDs, a bounded background translation queue, and translation
-  errors that preserve recognition. Keep the existing POST APIs unchanged.
-
-- Show provisional speaker labels during streaming, including long recordings,
-  instead of waiting for end-of-file. Keep offline refinement for short clips.
-
-- Replace inherited Glotalk Android documentation with Onplay STT documentation.
 
 ### Removed
 

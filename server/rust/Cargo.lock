@@ -1665,6 +1665,7 @@ name = "onplay-dub-cli"
 version = "1.0.2"
 dependencies = [
  "onplay-dub",
+ "serde_json",
 ]
 
 [[package]]
@@ -1672,12 +1673,14 @@ name = "onplay-server"
 version = "1.0.2"
 dependencies = [
  "base64 0.22.1",
+ "onplay-dub",
  "onplay-stt",
  "onplay-tts",
  "rand 0.8.8",
  "serde_json",
  "sha2",
  "thiserror 2.0.21",
+ "tiny_http",
  "tungstenite",
  "ureq",
 ]
@@ -1689,6 +1692,7 @@ dependencies = [
  "onplay-server",
  "onplay-tts",
  "serde_json",
+ "sha2",
  "tungstenite",
 ]
 

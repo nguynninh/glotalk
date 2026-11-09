@@ -8,12 +8,14 @@ publish.workspace = true
 
 [dependencies]
 base64.workspace = true
+onplay-dub.workspace = true
 onplay-stt.workspace = true
 onplay-tts.workspace = true
 rand.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+tiny_http.workspace = true
 tungstenite.workspace = true
 ureq.workspace = true
 

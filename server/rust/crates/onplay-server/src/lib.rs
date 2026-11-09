@@ -8,10 +8,16 @@
 //! The translation router stays a separate HTTP service (`./scripts/dev/translation.sh`).
 //! Up to `ONPLAY_MAX_SESSIONS` recognition sessions run at once ([`EngineSlots`]), each on
 //! its own recognition worker; opt-in transcripts are appended by [`sessions`].
+//!
+//! A connection whose first message has a `type` is a dub job connection instead
+//! ([`jobs`], `docs/video-dubbing-design.md`); job results are served over HTTP by
+//! [`downloads`] on `127.0.0.1:8767`.
 
 pub mod config;
+pub mod downloads;
 pub mod engine_slots;
 pub mod events;
+pub mod jobs;
 pub mod languages;
 pub mod models;
 pub mod numbers;
@@ -19,11 +25,14 @@ pub mod pipeline;
 pub mod sessions;
 pub mod socket;
 pub mod speech;
+pub mod time;
 pub mod trace;
 pub mod translation;
 
 use std::net::TcpListener;
 use std::sync::Arc;
+
+use jobs::Jobs;
 
 pub use config::Config;
 pub use engine_slots::EngineSlots;
@@ -44,6 +53,8 @@ pub struct Services {
     /// One worker per slot; each owns its loaded Sherpa models and runs the recognition of
     /// the session holding that slot.
     pub recognition: Vec<RecognitionWorker>,
+    /// Dub jobs; [`Jobs::disabled`] says why they are refused.
+    pub jobs: Arc<Jobs>,
     /// Receives connection events.
     pub observer: Arc<dyn Observer>,
 }
@@ -56,7 +67,9 @@ impl Services {
         let slots = EngineSlots::new(config.max_sessions);
         let context_passes = ContextPasses::start(translator.clone(), slots.clone());
         let recognition = (0..slots.count()).map(|_| RecognitionWorker::start()).collect();
-        Self { config, translator, speech: Arc::new(Speech::new()), slots, context_passes, recognition, observer: Arc::new(observer) }
+        let observer: Arc<dyn Observer> = Arc::new(observer);
+        let jobs = Jobs::start(&config, observer.clone());
+        Self { config, translator, speech: Arc::new(Speech::new()), slots, context_passes, recognition, jobs, observer }
     }
 
     /// Loads the streaming engine for `threads` and `low_latency` on the first worker in the
@@ -76,7 +89,17 @@ pub fn bind(config: &Config) -> std::io::Result<TcpListener> {
     TcpListener::bind(&config.address)
 }
 
-/// Accepts connections on `listener` (from [`bind`]) until it fails.
-pub fn serve(services: Services, listener: TcpListener) -> std::io::Result<()> {
+/// Accepts connections on `listener` (from [`bind`]) until it fails. With `downloads` (from
+/// [`bind_downloads`]) and dubbing on, also serves job results there.
+pub fn serve(services: Services, listener: TcpListener, downloads: Option<tiny_http::Server>) -> std::io::Result<()> {
+    if let Some(server) = downloads.filter(|_| services.jobs.disabled().is_none()) {
+        let jobs = services.jobs.clone();
+        std::thread::spawn(move || downloads::serve(&jobs, server));
+    }
     socket::serve(Arc::new(services), listener)
+}
+
+/// Opens the job download port.
+pub fn bind_downloads(config: &Config) -> std::io::Result<tiny_http::Server> {
+    tiny_http::Server::http(&config.download_address).map_err(std::io::Error::other)
 }

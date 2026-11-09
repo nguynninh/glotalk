@@ -5,8 +5,12 @@
 //! `lib/libonnxruntime.dylib` next to the binary unless `ORT_DYLIB_PATH` is set, the same
 //! library the Sherpa ONNX runtime loads, so speech and recognition share one copy.
 //! `ONPLAY_LOG=1` prints one line per connection event: client address, Origin and
-//! User-Agent, options, engine slot and outcome. `ONPLAY_DEBUG=1` also prints every frame
-//! and pipeline step with timings. Neither prints audio or recognized text.
+//! User-Agent, options, engine slot and outcome, and one per dub job change.
+//! `ONPLAY_DEBUG=1` also prints every frame and pipeline step with timings. Neither prints
+//! audio, recognized text, tokens or video links.
+//!
+//! Dub jobs are on when `ONPLAY_DUB_TOKENS` (default `dub-tokens` in the root) lists tester
+//! tokens; their results are then served on `http://127.0.0.1:8767`.
 
 mod log;
 
@@ -40,6 +44,13 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    let downloads = match config.dub_tokens.is_file().then(|| onplay_server::bind_downloads(&config)).transpose() {
+        Ok(downloads) => downloads,
+        Err(error) => {
+            eprintln!("Error: cannot listen on {}: {error}", config.download_address);
+            return ExitCode::FAILURE;
+        }
+    };
     let enabled = |name: &str| std::env::var(name).is_ok_and(|value| value == "1");
     let debug = enabled("ONPLAY_DEBUG");
     let services = if debug || enabled("ONPLAY_LOG") { Services::start(config, log::Log { debug }) } else { Services::start(config, Silent) };
@@ -59,7 +70,11 @@ fn main() -> ExitCode {
         Capture::Transcript => "transcript",
         Capture::Audio => "audio",
     });
-    match onplay_server::serve(services, listener) {
+    match services.jobs.disabled() {
+        None => println!("Dub jobs: on, results on http://{} (jobs in {})", config.download_address, config.job_dir.display()),
+        Some(reason) => println!("Dub jobs: off ({reason})"),
+    }
+    match onplay_server::serve(services, listener, downloads) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("Error: {error}");

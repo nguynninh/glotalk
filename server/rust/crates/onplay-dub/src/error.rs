@@ -23,8 +23,33 @@ pub enum Error {
 }
 
 impl Error {
+    /// Stable failure code for clients of a dub job (`docs/video-dubbing-design.md`).
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Command { program, .. } if program == "yt-dlp" => "download_failed",
+            Self::NoSpeech => "no_speech",
+            Self::Translation(_) => "translation_failed",
+            Self::Speech(_) => "speech_failed",
+            _ => "internal",
+        }
+    }
+
     pub(crate) fn io(path: impl Into<PathBuf>) -> impl FnOnce(std::io::Error) -> Self {
         let path = path.into();
         move |source| Self::Io { path, source }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn codes_failures_for_clients() {
+        let command = |program: &str| Error::Command { program: program.into(), detail: String::new() };
+        assert_eq!(command("yt-dlp").code(), "download_failed");
+        assert_eq!(command("ffmpeg").code(), "internal");
+        assert_eq!(Error::NoSpeech.code(), "no_speech");
+        assert_eq!(Error::Translation("x".into()).code(), "translation_failed");
     }
 }

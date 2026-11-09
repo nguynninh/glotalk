@@ -9,6 +9,8 @@ use crate::events::{Direction, Event, FrameKind, Observer, Stage};
 
 /// Messages whose top-level `text` is a server-written notice, not recognized speech.
 const NOTICES: [&str; 5] = ["status", "warning", "error", "translation_error", "audio_error"];
+/// Dub job strings that identify the user's video or carry an HLS path secret.
+const PRIVATE: [&str; 4] = ["url", "title", "thumbnail_url", "path"];
 
 #[derive(Clone)]
 pub struct Trace {
@@ -39,8 +41,9 @@ impl Trace {
     }
 }
 
-/// Replaces every `text` with `text_chars` (except a notice's own text) and drops base64
-/// audio `data`, so detail logs carry no speech, transcript or translation.
+/// Replaces every `text` with `text_chars` (except a notice's own text), drops base64
+/// audio `data`, and replaces dub links, titles and paths with their length, so detail logs
+/// carry no speech, transcript, translation or video identity.
 pub fn redact(message: Value) -> Value {
     let notice = message.get("type").and_then(Value::as_str).is_some_and(|kind| NOTICES.contains(&kind));
     match message {
@@ -58,6 +61,9 @@ fn redact_fields(fields: Map<String, Value>, keep_text: bool) -> Map<String, Val
             }
             ("data", Value::String(data)) => {
                 redacted.insert("data_chars".into(), data.len().into());
+            }
+            (private, Value::String(value)) if PRIVATE.contains(&private) => {
+                redacted.insert(format!("{private}_chars"), value.chars().count().into());
             }
             (_, value) => {
                 redacted.insert(key, if keep_text { value } else { redact_nested(value) });
@@ -88,5 +94,8 @@ mod tests {
         assert_eq!(redact(speakers), json!({"type": "speakers", "segments": [{"speaker": 1, "text_chars": 3}]}));
         assert_eq!(redact(json!({"type": "audio", "text": "hi", "data": "UklGRg=="})), json!({"type": "audio", "text_chars": 2, "data_chars": 8}));
         assert_eq!(redact(json!({"type": "error", "text": "Máy chủ đầy."})), json!({"type": "error", "text": "Máy chủ đầy."}));
+        let job = json!({"type": "job", "title": "Talk", "playback": {"path": "/jobs/j/hls/k/master.m3u8"}});
+        assert_eq!(redact(job), json!({"type": "job", "title_chars": 4, "playback": {"path_chars": 25}}));
+        assert_eq!(redact(json!({"type": "dub", "url": "https://x.y"})), json!({"type": "dub", "url_chars": 11}));
     }
 }

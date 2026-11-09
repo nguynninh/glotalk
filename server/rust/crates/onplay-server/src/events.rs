@@ -49,6 +49,20 @@ pub enum Event {
     Frame { connection: u64, at: Duration, direction: Direction, kind: FrameKind, bytes: usize, fields: Option<Value> },
     /// Detail: a pipeline step of the session finished, `at` after the connection opened.
     Stage { connection: u64, at: Duration, stage: Stage, took: Duration },
+    /// A dub job changed; `owner` is the tester name from the token file. Links, titles and
+    /// transcripts are never included.
+    Job { job: String, owner: String, change: JobChange },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum JobChange {
+    /// `duration` is the video's length in seconds.
+    Queued { duration: f64, target: String },
+    Started,
+    /// `state` is `done`, `failed` or `cancelled`; `code` the failure code.
+    Ended { state: &'static str, code: Option<&'static str>, took: Duration },
+    /// Deleted by the app, or `expired` after the retention period.
+    Removed { expired: bool },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
