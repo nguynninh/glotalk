@@ -4,6 +4,8 @@ import { acceptsAsset, Clip, clipEnd, contentEnd, displayOrder, fits, MediaAsset
 import { Segment } from "../lib/srt";
 import { defaultSubStyle, SubStyle } from "../lib/subStyle";
 import { ColorGrade, defaultGrade } from "../lib/colorGrade";
+import { nextSpeakerId, pickVoice, Speaker, speakerColor } from "../lib/speakers";
+import { PronounRule } from "../lib/pronouns";
 import { t } from "../i18n";
 
 export type RegionKind = "dialog" | "ocr";
@@ -41,7 +43,15 @@ export interface TranslateState {
   total: number;
 }
 
-export type InspectorTab = "caption" | "style" | "color" | "detect" | "export";
+/** Phân biệt người nói trong Editor (`detectSpeakers`). */
+export interface SpeakersRun {
+  running: boolean;
+  phase: "idle" | "download" | "model" | "audio" | "embed";
+  done: number;
+  total: number;
+}
+
+export type InspectorTab = "caption" | "speakers" | "style" | "color" | "detect" | "export";
 
 export interface AudioMix {
   /** Âm lượng tổng khi xem, 0..1 */
@@ -96,6 +106,11 @@ interface EditorState {
   segments: Segment[];
   selectedId: number | null;
   nextId: number;
+  /** Nhân vật; câu trỏ tới qua `Segment.speaker` = `Speaker.id`. */
+  speakers: Speaker[];
+  speakersRun: SpeakersRun;
+  /** Xưng hô tiếng Việt theo cặp nhân vật, áp sau khi dịch. */
+  pronouns: PronounRule[];
 
   time: number;
   playing: boolean;
@@ -126,6 +141,14 @@ interface EditorState {
   removeSegment: (id: number) => void;
   splitAt: (ms: number) => void;
   setMix: (p: Partial<AudioMix>) => void;
+  setSpeakers: (list: Speaker[]) => void;
+  updateSpeaker: (id: string, p: Partial<Speaker>) => void;
+  /** Thêm nhân vật mới, trả về id. */
+  addSpeaker: (name: string) => string;
+  /** Xoá nhân vật; các câu của nhân vật đó thành không rõ. */
+  removeSpeaker: (id: string) => void;
+  /** Chuyển mọi câu của `from` sang `into` rồi xoá `from`. */
+  mergeSpeaker: (from: string, into: string) => void;
 
   addTrack: (kind: Exclude<TrackKind, "caption">) => string;
   removeTrack: (id: string) => void;
@@ -167,6 +190,9 @@ export const useEditor = create<EditorState>((set, get) => ({
   segments: [],
   selectedId: null,
   nextId: 1,
+  speakers: [],
+  speakersRun: { running: false, phase: "idle", done: 0, total: 0 },
+  pronouns: [],
   time: 0,
   playing: false,
   pxPerSec: 60,
@@ -221,6 +247,30 @@ export const useEditor = create<EditorState>((set, get) => ({
     });
   },
   setMix: (p) => set((s) => ({ mix: { ...s.mix, ...p } })),
+  setSpeakers: (list) => set({ speakers: list }),
+  updateSpeaker: (id, p) => set((s) => ({ speakers: s.speakers.map((x) => (x.id === id ? { ...x, ...p } : x)) })),
+  addSpeaker: (name) => {
+    const { speakers } = get();
+    const id = nextSpeakerId(speakers);
+    const sp: Speaker = { id, name, gender: null, voice: pickVoice(null, speakers.map((x) => x.voice)), color: speakerColor(speakers.length) };
+    set({ speakers: [...speakers, sp] });
+    return id;
+  },
+  removeSpeaker: (id) =>
+    set((s) => ({
+      speakers: s.speakers.filter((x) => x.id !== id),
+      segments: s.segments.map((x) => (x.speaker === id || x.listener === id ? { ...x, speaker: x.speaker === id ? undefined : x.speaker, listener: x.listener === id ? undefined : x.listener } : x)),
+      pronouns: s.pronouns.filter((r) => r.from !== id && r.to !== id),
+    })),
+  mergeSpeaker: (from, into) =>
+    set((s) => ({
+      speakers: s.speakers.filter((x) => x.id !== from),
+      segments: s.segments.map((x) => (x.speaker === from || x.listener === from ? { ...x, speaker: x.speaker === from ? into : x.speaker, listener: x.listener === from ? into : x.listener } : x)),
+      // Luật của nhân vật bị gộp chỉ giữ khi nhân vật đích chưa có luật cho cặp đó.
+      pronouns: s.pronouns
+        .map((r) => ({ ...r, from: r.from === from ? into : r.from, to: r.to === from ? into : r.to }))
+        .filter((r, i, all) => r.from !== r.to && all.findIndex((x) => x.from === r.from && x.to === r.to) === i),
+    })),
 
   addTrack: (kind) => {
     const id = `t${get().uid}`;

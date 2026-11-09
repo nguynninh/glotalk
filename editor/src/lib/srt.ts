@@ -5,6 +5,8 @@ export interface Segment {
   src: string; // câu gốc
   vi: string; // câu dịch
   speaker?: string;
+  /** Người nghe (`Speaker.id`) đặt tay để chọn xưng hô; trống thì tự đoán theo câu kề. */
+  listener?: string;
 }
 
 const toMs = (t: string) => {

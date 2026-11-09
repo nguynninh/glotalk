@@ -3,6 +3,7 @@ use crate::error::AppResult;
 use crate::media::ffmpeg::{self, MediaInfo, ToolStatus, VideoInfo};
 use crate::media::render;
 use crate::ocr::{self, engine::OcrEngine, OcrJob, OcrOutput, OcrProgress};
+use crate::speakers;
 use crate::stt::{self, SttJob, SttOutput};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -259,5 +260,75 @@ pub async fn stt_transcribe(app: tauri::AppHandle, state: State<'_, SttState>, j
 
 #[tauri::command]
 pub fn stt_cancel(state: State<'_, SttState>) {
+    state.cancel.store(true, Ordering::SeqCst);
+}
+
+// ===== Phân biệt người nói =====
+
+#[derive(Default)]
+pub struct SpeakersState {
+    cancel: Arc<AtomicBool>,
+    running: AtomicBool,
+    /// Model CAM++ nạp một lần, dùng lại cho các lần chạy sau.
+    embedder: Arc<Mutex<Option<speakers::Embedder>>>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct SpeakersJob {
+    path: String,
+    spans: Vec<speakers::Span>,
+    options: speakers::Options,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SpeakersProgress {
+    /// "download" | "model" | "audio" | "embed"
+    phase: &'static str,
+    done: u64,
+    total: u64,
+}
+
+#[tauri::command]
+pub async fn speakers_detect(app: tauri::AppHandle, state: State<'_, SpeakersState>, job: SpeakersJob) -> AppResult<speakers::Outcome> {
+    if state.running.swap(true, Ordering::SeqCst) {
+        return Err(crate::error::AppError::Other("Phân biệt người nói đang chạy.".into()));
+    }
+    state.cancel.store(false, Ordering::SeqCst);
+    let (cancel, embedder) = (state.cancel.clone(), state.embedder.clone());
+    let result = tauri::async_runtime::spawn_blocking(move || -> AppResult<speakers::Outcome> {
+        let emit = |phase, done, total| {
+            let _ = app.emit("speakers-progress", SpeakersProgress { phase, done, total });
+        };
+        let mut loaded = embedder.lock().expect("speakers lock");
+        if loaded.is_none() {
+            let last = Mutex::new(std::time::Instant::now());
+            let model = speakers::ensure_model(&oar_ocr::download::cache_dir(), &cancel, |done, total| {
+                let mut at = last.lock().expect("progress lock");
+                if at.elapsed().as_millis() >= 200 {
+                    *at = std::time::Instant::now();
+                    emit("download", done, total);
+                }
+            })?;
+            emit("model", 0, 0);
+            *loaded = Some(speakers::Embedder::load(&model)?);
+        }
+        emit("audio", 0, 0);
+        let pcm = stt::decode_pcm(&job.path)?;
+        let mut last = std::time::Instant::now();
+        speakers::run(loaded.as_mut().expect("vừa nạp"), &pcm, &job.spans, job.options, &cancel, |done, total| {
+            if done == total || last.elapsed().as_millis() >= 200 {
+                last = std::time::Instant::now();
+                emit("embed", done as u64, total as u64);
+            }
+        })
+    })
+    .await
+    .map_err(|e| crate::error::AppError::Other(e.to_string()));
+    state.running.store(false, Ordering::SeqCst);
+    result?
+}
+
+#[tauri::command]
+pub fn speakers_cancel(state: State<'_, SpeakersState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }

@@ -306,6 +306,17 @@ label.inline { display: flex; align-items: center; gap: 7px; cursor: pointer; }
 .cap-clip { background: var(--clip-cap); border: 1px solid rgba(255,255,255,.12); cursor: grab; display: flex; flex-direction: column; justify-content: center; padding: 0 8px; color: #fff; }
 .cap-clip:active { cursor: grabbing; }
 .cap-clip.selected { background: var(--clip-cap-sel); border-color: #fff; box-shadow: 0 0 0 1px #fff; z-index: 1; }
+/* Màu nhân vật: vạch dày bên trái clip phụ đề. */
+.cap-clip.has-spk { border-left: 4px solid; }
+.spk-row { border-left: 4px solid var(--border); padding: 4px 0 6px 8px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+.spk-head { display: flex; align-items: center; gap: 6px; }
+.spk-head input:not([type]) { flex: 1; min-width: 0; }
+.spk-fields { display: flex; flex-wrap: wrap; gap: 4px; }
+.spk-fields select { flex: 1 1 45%; min-width: 0; }
+.spk-unassigned { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 6px; }
+.pron-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.pron-pair, .pron-words { display: flex; align-items: center; gap: 4px; }
+.pron-pair select, .pron-words input { flex: 1; min-width: 0; }
 .cap-vi { font-size: 11.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .cap-src { font-size: 10.5px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 .cap-clip .dim { opacity: .3; text-decoration: line-through; }
